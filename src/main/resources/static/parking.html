@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Valet Parking</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #14181d;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100dvh;
+      overflow: hidden;
+      touch-action: none;
+      font-family: monospace;
+    }
+    canvas { display: block; }
+    #controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      width: 100%;
+      max-width: 400px;
+      padding: 6px 12px;
+      gap: 8px;
+    }
+    #steer-btns, #pedal-btns { display: flex; gap: 10px; }
+    .ctrl-btn {
+      background: rgba(255,255,255,0.12);
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      color: #fff;
+      font-size: 22px;
+      width: 60px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #btn-gas {
+      background: rgba(105,240,174,0.18);
+      border-color: #69f0ae;
+      color: #69f0ae;
+      font-size: 13px;
+      font-weight: bold;
+    }
+    #btn-rev {
+      background: rgba(255,171,64,0.18);
+      border-color: #ffab40;
+      color: #ffab40;
+      font-size: 13px;
+      font-weight: bold;
+    }
+    .ctrl-btn:active { background: rgba(255,255,255,0.32); }
+    #btn-gas:active { background: rgba(105,240,174,0.4); }
+    #btn-rev:active { background: rgba(255,171,64,0.4); }
+    #back-link {
+      position: fixed;
+      top: 8px;
+      left: 10px;
+      color: #aaa;
+      font: 12px monospace;
+      text-decoration: none;
+      z-index: 10;
+    }
+    #back-link:hover { color: #fff; }
+  </style>
+</head>
+<body>
+  <a href="/" id="back-link">← Back</a>
+  <canvas id="c" width="400" height="580"></canvas>
+  <div id="controls">
+    <div id="steer-btns">
+      <div class="ctrl-btn" id="btn-left">◀</div>
+      <div class="ctrl-btn" id="btn-right">▶</div>
+    </div>
+    <div id="pedal-btns">
+      <div class="ctrl-btn" id="btn-rev">REV</div>
+      <div class="ctrl-btn" id="btn-gas">GAS</div>
+    </div>
+  </div>
+
+  <script>
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const W = 400, H = 580, M = 6;        // M = wall margin
+
+  // ---- CAR PHYSICS ----
+  const CAR_L = 46, CAR_W = 24;
+  const ACCEL = 0.07, MAX_FWD = 2.8, MAX_REV = 1.5;
+  const FRICTION = 0.96, TURN = 0.052;
+
+  // ---- LEVELS ----
+  // target.angle: 0 = car stands vertical, PI/2 = car lies horizontal
+  const LEVELS = [
+    {
+      name: 'WARM-UP',
+      start: { x: 200, y: 505, angle: 0 },
+      target: { x: 164, y: 34, w: 72, h: 120, angle: 0 },
+      obstacles: [
+        { x: 66, y: 40, w: 60, h: 110 },
+        { x: 274, y: 40, w: 60, h: 110 }
+      ]
+    },
+    {
+      name: 'TURN IN',
+      start: { x: 300, y: 500, angle: 0 },
+      target: { x: 22, y: 232, w: 120, h: 72, angle: Math.PI / 2 },
+      obstacles: [
+        { x: 22, y: 110, w: 108, h: 96 },
+        { x: 22, y: 330, w: 108, h: 96 },
+        { x: 250, y: 70, w: 128, h: 40 }
+      ]
+    },
+    {
+      name: 'TIGHT SPOT',
+      start: { x: 205, y: 505, angle: 0 },
+      target: { x: 164, y: 232, w: 72, h: 116, angle: 0 },
+      obstacles: [
+        { x: 78, y: 236, w: 58, h: 108 },
+        { x: 264, y: 236, w: 58, h: 108 },
+        { x: 120, y: 60, w: 160, h: 56 },
+        { x: 300, y: 380, w: 60, h: 150 }
+      ]
+    }
+  ];
+
+  // ---- STATE ----
+  let gs = 'start';                 // start | playing | crash | levelup | win
+  let level = 0, lives, frame = 0, levelFrame = 0;
+  let totalFrames = 0, crashTimer = 0, levelupTimer = 0, parkGlow = 0;
+  let bestTime = +localStorage.getItem('vp_best') || 0;
+  const car = { x: 0, y: 0, angle: 0, speed: 0 };
+
+  // ---- INPUT ----
+  const keys = {};
+  addEventListener('keydown', e => {
+    keys[e.code] = true;
+    if (['Space','ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code)) e.preventDefault();
+  });
+  addEventListener('keyup', e => { keys[e.code] = false; });
+
+  let tLeft = false, tRight = false, tGas = false, tRev = false;
+  function bindBtn(id, set) {
+    const el = document.getElementById(id);
+    const on  = e => { e.preventDefault(); set(true);  };
+    const off = e => { e.preventDefault(); set(false); };
+    el.addEventListener('touchstart', on, { passive: false });
+    el.addEventListener('touchend',   off, { passive: false });
+    el.addEventListener('touchcancel',off, { passive: false });
+    el.addEventListener('mousedown',  on);
+    el.addEventListener('mouseup',    off);
+    el.addEventListener('mouseleave', off);
+  }
+  bindBtn('btn-left',  v => tLeft  = v);
+  bindBtn('btn-right', v => tRight = v);
+  bindBtn('btn-gas',   v => tGas   = v);
+  bindBtn('btn-rev',   v => tRev   = v);
+
+  // ---- GEOMETRY ----
+  function carSamples(c) {       // 9 points: corners, edge-mids, centre
+    const fa = { x: Math.sin(c.angle), y: -Math.cos(c.angle) };
+    const ra = { x: Math.cos(c.angle), y: Math.sin(c.angle) };
+    const hl = CAR_L / 2, hw = CAR_W / 2, pts = [];
+    for (const fl of [hl, 0, -hl])
+      for (const rw of [hw, 0, -hw])
+        pts.push({ x: c.x + fa.x*fl + ra.x*rw, y: c.y + fa.y*fl + ra.y*rw });
+    return pts;
+  }
+  function carCorners(c) {
+    const fa = { x: Math.sin(c.angle), y: -Math.cos(c.angle) };
+    const ra = { x: Math.cos(c.angle), y: Math.sin(c.angle) };
+    const hl = CAR_L / 2, hw = CAR_W / 2;
+    return [[hl,hw],[hl,-hw],[-hl,hw],[-hl,-hw]].map(([fl,rw]) =>
+      ({ x: c.x + fa.x*fl + ra.x*rw, y: c.y + fa.y*fl + ra.y*rw }));
+  }
+  function inRect(p, r) { return p.x > r.x && p.x < r.x+r.w && p.y > r.y && p.y < r.y+r.h; }
+
+  function collides(c) {
+    const pts = carSamples(c);
+    for (const p of pts) {
+      if (p.x < M || p.x > W-M || p.y < M || p.y > H-M) return true;
+      for (const o of LEVELS[level].obstacles) if (inRect(p, o)) return true;
+    }
+    return false;
+  }
+
+  function aligned(a, t) {
+    let d = a - t;
+    while (d >  Math.PI) d -= 2*Math.PI;
+    while (d < -Math.PI) d += 2*Math.PI;
+    d = Math.abs(d);
+    return Math.min(d, Math.abs(Math.PI - d)) < 0.30;   // allow nose-in or nose-out
+  }
+
+  function isParked(c) {
+    const t = LEVELS[level].target;
+    const pad = 4;
+    const box = { x: t.x - pad, y: t.y - pad, w: t.w + 2*pad, h: t.h + 2*pad };
+    if (!inRect({ x: c.x, y: c.y }, t)) return false;
+    if (!carCorners(c).every(p => inRect(p, box))) return false;
+    if (Math.abs(c.speed) > 0.4) return false;
+    return aligned(c.angle, t.angle);
+  }
+
+  // ---- FLOW ----
+  function loadLevel(i) {
+    const s = LEVELS[i].start;
+    car.x = s.x; car.y = s.y; car.angle = s.angle; car.speed = 0;
+    levelFrame = 0;
+  }
+  function startGame() {
+    level = 0; lives = 3; totalFrames = 0; parkGlow = 0;
+    loadLevel(0); gs = 'playing';
+  }
+
+  // ---- UPDATE ----
+  function update() {
+    frame++;
+
+    if (gs === 'start' || gs === 'win') {
+      if (keys['Space'] || tGas) { tGas = false; startGame(); }
+      return;
+    }
+
+    if (gs === 'crash') {
+      crashTimer--;
+      if (crashTimer <= 0) {
+        if (lives <= 0) { gs = 'start'; }
+        else { loadLevel(level); gs = 'playing'; }
+      }
+      return;
+    }
+
+    if (gs === 'levelup') {
+      levelupTimer--;
+      if (levelupTimer <= 0) {
+        level++;
+        if (level >= LEVELS.length) {
+          if (bestTime === 0 || totalFrames < bestTime) {
+            bestTime = totalFrames; localStorage.setItem('vp_best', bestTime);
+          }
+          gs = 'win';
+        } else { loadLevel(level); gs = 'playing'; }
+      }
+      return;
+    }
+
+    // playing
+    levelFrame++; totalFrames++;
+    if (parkGlow > 0) parkGlow--;
+
+    const gas = keys['ArrowUp'] || keys['KeyW'] || tGas;
+    const rev = keys['ArrowDown'] || keys['KeyS'] || tRev;
+    if (gas)       car.speed = Math.min(MAX_FWD, car.speed + ACCEL);
+    else if (rev)  car.speed = Math.max(-MAX_REV, car.speed - ACCEL);
+    else { car.speed *= FRICTION; if (Math.abs(car.speed) < 0.02) car.speed = 0; }
+
+    const steer = (keys['ArrowLeft']||keys['KeyA']||tLeft ? -1 : 0)
+                + (keys['ArrowRight']||keys['KeyD']||tRight ? 1 : 0);
+    // turn rate scales with speed and its sign (reverse flips steering, like a real car)
+    car.angle += steer * TURN * (car.speed / MAX_FWD);
+
+    const nx = car.x + Math.sin(car.angle) * car.speed;
+    const ny = car.y - Math.cos(car.angle) * car.speed;
+    const prev = { x: car.x, y: car.y };
+    car.x = nx; car.y = ny;
+
+    if (collides(car)) {
+      car.x = prev.x; car.y = prev.y;
+      lives--;
+      gs = 'crash'; crashTimer = 70; car.speed = 0;
+      return;
+    }
+
+    if (isParked(car)) {
+      gs = 'levelup'; levelupTimer = 90; parkGlow = 0;
+    }
+  }
+
+  // ---- DRAW HELPERS ----
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x+r, y);
+    ctx.arcTo(x+w, y,   x+w, y+h, r);
+    ctx.arcTo(x+w, y+h, x,   y+h, r);
+    ctx.arcTo(x,   y+h, x,   y,   r);
+    ctx.arcTo(x,   y,   x+w, y,   r);
+    ctx.closePath();
+  }
+
+  function drawParkedCar(o) {
+    const horiz = o.w > o.h;
+    ctx.fillStyle = '#37474f';
+    roundRect(o.x+3, o.y+3, o.w-6, o.h-6, 6); ctx.fill();
+    ctx.fillStyle = '#263238';
+    if (horiz) ctx.fillRect(o.x+o.w*0.18, o.y+7, o.w*0.64, o.h-14);
+    else       ctx.fillRect(o.x+7, o.y+o.h*0.18, o.w-14, o.h*0.64);
+    ctx.fillStyle = '#455a64';
+    roundRect(o.x+3, o.y+3, o.w-6, o.h-6, 6); ctx.stroke();
+  }
+
+  function drawCar(c, body) {
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    ctx.rotate(c.angle);
+    // shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    roundRect(-CAR_W/2+2, -CAR_L/2+3, CAR_W, CAR_L, 7); ctx.fill();
+    // body
+    ctx.fillStyle = body;
+    roundRect(-CAR_W/2, -CAR_L/2, CAR_W, CAR_L, 7); ctx.fill();
+    // windshield (front = up)
+    ctx.fillStyle = 'rgba(20,30,40,0.85)';
+    roundRect(-CAR_W/2+4, -CAR_L/2+6, CAR_W-8, 11, 3); ctx.fill();
+    // rear window
+    roundRect(-CAR_W/2+4, CAR_L/2-15, CAR_W-8, 9, 3); ctx.fill();
+    // headlights
+    ctx.fillStyle = '#fff8c4';
+    ctx.fillRect(-CAR_W/2+3, -CAR_L/2+1, 5, 3);
+    ctx.fillRect( CAR_W/2-8, -CAR_L/2+1, 5, 3);
+    ctx.restore();
+  }
+
+  function drawTarget() {
+    const t = LEVELS[level].target;
+    const ok = parkGlow > 0;
+    const pulse = 0.5 + 0.35 * Math.sin(frame / 12);
+    ctx.save();
+    ctx.strokeStyle = `rgba(105,240,174,${ok ? 1 : pulse})`;
+    ctx.lineWidth = 3;
+    ctx.setLineDash([10, 7]);
+    ctx.strokeRect(t.x, t.y, t.w, t.h);
+    ctx.setLineDash([]);
+    // big P + orientation chevron
+    const cx = t.x + t.w/2, cy = t.y + t.h/2;
+    ctx.translate(cx, cy);
+    ctx.rotate(t.angle);
+    ctx.fillStyle = `rgba(105,240,174,${ok ? 1 : 0.55})`;
+    ctx.font = 'bold 26px monospace';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('P', 0, 2);
+    ctx.beginPath();
+    ctx.moveTo(-9, -22); ctx.lineTo(0, -31); ctx.lineTo(9, -22);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawLot() {
+    ctx.fillStyle = '#2b2f36';
+    ctx.fillRect(0, 0, W, H);
+    // outer kerb
+    ctx.strokeStyle = '#f4d35e';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(M, M, W-2*M, H-2*M);
+    // faint lane hatching
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    ctx.lineWidth = 2;
+    for (let y = 40; y < H; y += 60) {
+      ctx.beginPath(); ctx.moveTo(20, y); ctx.lineTo(W-20, y); ctx.stroke();
+    }
+  }
+
+  // ---- RENDER ----
+  function render() {
+    drawLot();
+
+    if (gs === 'start') { screen('start'); return; }
+    if (gs === 'win')   { screen('win');   return; }
+
+    drawTarget();
+    LEVELS[level].obstacles.forEach(drawParkedCar);
+
+    if (gs === 'crash') {
+      drawCar(car, frame % 8 < 4 ? '#ff5252' : '#ffd54f');
+    } else {
+      drawCar(car, '#ffd54f');
+    }
+
+    hud();
+
+    if (gs === 'crash') banner('CRUNCH!', '#ff5252', lives > 0 ? 'careful…' : 'out of cars');
+    if (gs === 'levelup') banner('PARKED!', '#69f0ae',
+      level + 1 < LEVELS.length ? 'next lot →' : 'all done!');
+  }
+
+  function hud() {
+    ctx.textAlign = 'left'; ctx.fillStyle = '#fff'; ctx.font = 'bold 13px monospace';
+    ctx.fillText('LOT ' + (level+1) + '/' + LEVELS.length, 12, 22);
+    ctx.textAlign = 'center'; ctx.fillStyle = '#f4d35e';
+    ctx.fillText(LEVELS[level].name, W/2, 22);
+    ctx.textAlign = 'right'; ctx.fillStyle = '#fff';
+    ctx.fillText(time(totalFrames), W-12, 22);
+    // lives as little cars
+    ctx.textAlign = 'left'; ctx.fillStyle = '#ffd54f'; ctx.font = '14px monospace';
+    ctx.fillText('🚗'.repeat(Math.max(0, lives)), 12, H-14);
+  }
+
+  function time(f) {
+    const s = f / 60;
+    return s.toFixed(1) + 's';
+  }
+
+  function banner(title, col, sub) {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.fillRect(0, H/2-46, W, 92);
+    ctx.fillStyle = col; ctx.font = 'bold 34px monospace';
+    ctx.fillText(title, W/2, H/2-6);
+    ctx.fillStyle = '#ddd'; ctx.font = '13px monospace';
+    ctx.fillText(sub, W/2, H/2+24);
+  }
+
+  function screen(type) {
+    ctx.textAlign = 'center';
+    if (type === 'start') {
+      ctx.fillStyle = '#ffd54f'; ctx.font = 'bold 34px monospace';
+      ctx.fillText('VALET', W/2, H/2-120);
+      ctx.fillText('PARKING', W/2, H/2-82);
+      // a little demo car + spot
+      ctx.strokeStyle = '#69f0ae'; ctx.lineWidth = 3; ctx.setLineDash([8,6]);
+      ctx.strokeRect(W/2-36, H/2-46, 72, 60); ctx.setLineDash([]);
+      drawCar({ x: W/2, y: H/2+40, angle: 0 }, '#ffd54f');
+      ctx.fillStyle = '#aaa'; ctx.font = '12px monospace';
+      ctx.fillText('STEER + GAS / REV INTO THE GREEN P', W/2, H/2+86);
+      ctx.fillText('DON\'T HIT THE OTHER CARS OR KERB', W/2, H/2+104);
+      ctx.fillStyle = frame % 60 < 30 ? '#69f0ae' : '#fff'; ctx.font = 'bold 13px monospace';
+      ctx.fillText('GAS / SPACE TO START', W/2, H/2+140);
+      if (bestTime > 0) {
+        ctx.fillStyle = '#777'; ctx.font = '11px monospace';
+        ctx.fillText('BEST: ' + time(bestTime), W/2, H/2+162);
+      }
+    } else {
+      ctx.fillStyle = '#69f0ae'; ctx.font = 'bold 38px monospace';
+      ctx.fillText('ALL PARKED!', W/2, H/2-40);
+      ctx.fillStyle = '#fff'; ctx.font = '16px monospace';
+      ctx.fillText('TIME: ' + time(totalFrames), W/2, H/2+2);
+      ctx.fillStyle = '#f4d35e';
+      ctx.fillText('BEST: ' + time(bestTime), W/2, H/2+28);
+      ctx.fillStyle = frame % 60 < 30 ? '#69f0ae' : '#fff'; ctx.font = 'bold 13px monospace';
+      ctx.fillText('GAS / SPACE TO PLAY AGAIN', W/2, H/2+72);
+    }
+  }
+
+  // ---- RESIZE ----
+  function resize() {
+    const pad = document.getElementById('controls').offsetHeight + 10;
+    const scale = Math.min(window.innerWidth / W, (window.innerHeight - pad) / H);
+    canvas.style.width  = (W * scale) + 'px';
+    canvas.style.height = (H * scale) + 'px';
+  }
+  addEventListener('resize', resize);
+  resize();
+
+  // ---- LOOP ----
+  (function loop(){ update(); render(); requestAnimationFrame(loop); })();
+  </script>
+</body>
+</html>
