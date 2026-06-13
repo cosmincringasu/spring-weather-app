@@ -106,7 +106,7 @@
         <div id="message">Click a button...</div>
         <div class="buttons">
             <button onclick="greet('/api/hello')">Hello World</button>
-            <button onclick="greet('/api/hello/maria')">Hello Maria</button>
+            <button onclick="greet('/api/hello/maria'); speakMaria()">Hello Maria</button>
         </div>
     </div>
 
@@ -152,6 +152,31 @@
                 .then(res => res.text())
                 .then(text => document.getElementById('message').textContent = text)
                 .catch(() => document.getElementById('message').textContent = 'Error fetching message');
+        }
+
+        // Maria's serious Romanian line, spoken via the browser's text-to-speech
+        function speakMaria() {
+            if (!('speechSynthesis' in window)) return;
+            const phrase = 'Vreau vacanță! Vreau să bat pământul!';
+            const speak = () => {
+                const utter = new SpeechSynthesisUtterance(phrase);
+                utter.lang = 'ro-RO';
+                utter.rate = 0.9;   // a touch slower for a serious delivery
+                utter.pitch = 0.9;  // slightly lower pitch, but still a female voice
+                const voices = window.speechSynthesis.getVoices();
+                const voice =
+                    voices.find(v => /^ro\b|ro[-_]ro/i.test(v.lang) && /female|woman|ioana|maria|andreea/i.test(v.name)) ||
+                    voices.find(v => /^ro\b|ro[-_]ro/i.test(v.lang)) ||
+                    voices.find(v => /female|woman|zira|samantha|google uk english female/i.test(v.name));
+                if (voice) utter.voice = voice;
+                window.speechSynthesis.cancel();
+                window.speechSynthesis.speak(utter);
+            };
+            if (window.speechSynthesis.getVoices().length) {
+                speak();
+            } else {
+                window.speechSynthesis.addEventListener('voiceschanged', speak, { once: true });
+            }
         }
 
         // Weather
