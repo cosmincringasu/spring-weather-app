@@ -232,6 +232,15 @@
   // ---- GEOMETRY ----
   function vecAngle(dx, dy) { return Math.atan2(dx, -dy); }   // inverse of forward=(sin a,-cos a)
   function inRect(p, r) { return p.x > r.x && p.x < r.x+r.w && p.y > r.y && p.y < r.y+r.h; }
+  function aabbOf(re) {                 // axis-aligned bounding box of an oriented rect
+    const c = rectCorners(re);
+    let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+    for (const p of c) { minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x); minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y); }
+    return { x: minX, y: minY, w: maxX-minX, h: maxY-minY };
+  }
+  function rectsOverlap(a, b) {
+    return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+  }
 
   function rectSamples(re) {            // 9 sample points of an oriented rect
     const fa = { x: Math.sin(re.a), y: -Math.cos(re.a) };
@@ -300,20 +309,50 @@
     player.cab = spec.units[0];
     player.trailers = spec.units.slice(1);
   }
-  function loadLevel(i) {
-    const L = LEVELS[i], s = L.start;
-    player.C = { x: s.x, y: s.y };
-    player.heading = s.angle;
+  // lay the vehicle out straight, nose pointing along `ang`, cab centre at (cx,cy)
+  function placeVehicle(cx, cy, ang) {
+    player.C = { x: cx, y: cy };
+    player.heading = ang;
     player.speed = 0;
-    const f = { x: Math.sin(s.angle), y: -Math.cos(s.angle) };
-    let prev = { x: s.x - f.x*player.cab.len*0.42, y: s.y - f.y*player.cab.len*0.42 };
+    const f = { x: Math.sin(ang), y: -Math.cos(ang) };
+    let prev = { x: cx - f.x*player.cab.len*0.42, y: cy - f.y*player.cab.len*0.42 };
     player.tnodes = [ { ...prev } ];
     for (const t of player.trailers) {
       const link = t.len * 0.9;
       prev = { x: prev.x - f.x*link, y: prev.y - f.y*link };
       player.tnodes.push({ ...prev });
     }
+  }
+
+  function loadLevel(i) {
+    const L = LEVELS[i], s = L.start;
+    placeVehicle(s.x, s.y, s.angle);
+
+    // Long rigs (e.g. the truck + 2 trailers) can hang past the arena walls at
+    // the car-sized start point — slide the whole rig in so it starts fully inside.
+    const pad = 5;
+    let minX=1e9,minY=1e9,maxX=-1e9,maxY=-1e9;
+    for (const re of vehicleRects()) for (const p of rectCorners(re)) {
+      minX=Math.min(minX,p.x); maxX=Math.max(maxX,p.x);
+      minY=Math.min(minY,p.y); maxY=Math.max(maxY,p.y);
+    }
+    let dx=0, dy=0;
+    if (minX < M+pad)   dx += (M+pad) - minX;
+    if (maxX > W-M-pad) dx -= maxX - (W-M-pad);
+    if (minY < M+pad)   dy += (M+pad) - minY;
+    if (maxY > H-M-pad) dy -= maxY - (H-M-pad);
+    if (dx !== 0 || dy !== 0) placeVehicle(s.x + dx, s.y + dy, s.angle);
+
     movers = (L.mov || []).map(m => ({ ...m }));
+    // Don't let a moving car spawn sitting on top of the (now longer) vehicle.
+    const boxes = vehicleRects().map(aabbOf);
+    for (const m of movers) {
+      let guard = 0;
+      while (boxes.some(b => rectsOverlap(b, { x:m.x, y:m.y, w:m.w, h:m.h })) && guard++ < 4) {
+        if (m.axis === 'x') { m.x = (m.x < (m.lo+m.hi)/2) ? m.lo : m.hi - m.w; m.dir *= -1; }
+        else                { m.y = (m.y < (m.lo+m.hi)/2) ? m.lo : m.hi - m.h; m.dir *= -1; }
+      }
+    }
     if (L.tutorial) { tutStep = 0; tutStartAngle = s.angle; }
   }
   function startGame() {
