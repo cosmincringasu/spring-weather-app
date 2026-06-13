@@ -3,10 +3,23 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hello World</title>
+    <title>⚙ Spring Steam Works</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700;900&family=IM+Fell+English+SC&family=Special+Elite&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --brass:   #b88a3e;
+            --brass-d: #5e3f1c;
+            --copper:  #a4582b;
+            --rust:    #8a3b12;
+            --ink:     #3a2a18;
+            --faded:   #9a8050;
+            --parch-1: #f3e7c8;
+            --parch-2: #e4cf9f;
+        }
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Special Elite', 'Courier New', monospace;
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -15,35 +28,85 @@
             margin: 0;
             padding: 2rem 0;
             gap: 1.5rem;
-            background-color: #f0f2f5;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at 50% -10%, rgba(198,150,74,0.20), transparent 55%),
+                radial-gradient(circle at 50% 110%, rgba(120,80,40,0.28), transparent 55%),
+                linear-gradient(160deg, #261a10 0%, #170f08 55%, #0e0905 100%) fixed;
             box-sizing: border-box;
         }
         .card {
-            background: white;
+            position: relative;
             padding: 2rem 3rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            border-radius: 10px;
             text-align: center;
             min-width: 320px;
             width: 100%;
             max-width: 480px;
             box-sizing: border-box;
+            color: var(--ink);
+            border: 3px solid var(--brass-d);
+            background:
+                radial-gradient(circle at 15px 15px,                       #7c5a2e 2.6px, transparent 3.2px),
+                radial-gradient(circle at calc(100% - 15px) 15px,          #7c5a2e 2.6px, transparent 3.2px),
+                radial-gradient(circle at 15px calc(100% - 15px),          #7c5a2e 2.6px, transparent 3.2px),
+                radial-gradient(circle at calc(100% - 15px) calc(100% - 15px), #7c5a2e 2.6px, transparent 3.2px),
+                linear-gradient(160deg, var(--parch-1), var(--parch-2));
+            background-repeat: no-repeat;
+            box-shadow:
+                inset 0 0 0 2px var(--brass),
+                inset 0 0 22px rgba(94,63,28,0.28),
+                0 6px 20px rgba(0,0,0,0.55);
         }
-        h1 { color: #333; font-size: 2rem; margin: 0 0 1rem; }
-        h2 { color: #555; font-size: 1.2rem; margin: 0 0 1rem; }
-        #message { font-size: 1.8rem; color: #4a90e2; font-weight: bold; margin-bottom: 1.5rem; }
-        .buttons { display: flex; gap: 1rem; justify-content: center; }
+        h1 {
+            font-family: 'Cinzel Decorative', serif;
+            font-weight: 900;
+            color: #6e4a1e;
+            font-size: 1.9rem;
+            margin: 0 0 1rem;
+            letter-spacing: 1px;
+            text-shadow: 1px 1px 0 #e7c98b, 2px 2px 0 rgba(0,0,0,0.15);
+        }
+        h2 {
+            font-family: 'IM Fell English SC', serif;
+            color: #5a3d1d;
+            font-size: 1.4rem;
+            font-weight: normal;
+            margin: 0 0 1rem;
+            letter-spacing: 0.5px;
+            border-bottom: 2px groove var(--brass);
+            padding-bottom: 0.4rem;
+        }
+        h2::before { content: '⚙ '; color: var(--copper); }
+        h2::after  { content: ' ⚙'; color: var(--copper); }
+        #message {
+            font-family: 'IM Fell English SC', serif;
+            font-size: 1.9rem;
+            color: var(--rust);
+            margin-bottom: 1.5rem;
+            text-shadow: 1px 1px 0 rgba(231,201,139,0.7);
+        }
+        .buttons { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
         button {
-            padding: 0.5rem 1.2rem;
-            font-size: 1rem;
-            border: none;
-            border-radius: 5px;
+            font-family: 'Special Elite', monospace;
+            padding: 0.55rem 1.2rem;
+            font-size: 0.95rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
             cursor: pointer;
-            background-color: #4a90e2;
-            color: white;
+            color: #2a1c0c;
+            border: 2px solid var(--brass-d);
+            border-radius: 6px;
+            background: linear-gradient(#d8b15c, #a87c30);
+            box-shadow: inset 0 1px 0 rgba(255,244,214,0.7), inset 0 -2px 4px rgba(94,63,28,0.4), 0 3px 6px rgba(0,0,0,0.4);
         }
-        button:hover { background-color: #357abd; }
-        button:disabled { background-color: #aaa; cursor: default; }
+        button:hover { background: linear-gradient(#e6c074, #b98a3a); }
+        button:active { transform: translateY(1px); box-shadow: inset 0 2px 5px rgba(94,63,28,0.6); }
+        button:disabled {
+            background: linear-gradient(#b9ad94, #968a72);
+            color: #5a4f3c; cursor: default;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+        }
         .weather-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -51,55 +114,82 @@
             text-align: left;
             margin-top: 0.5rem;
         }
-        .weather-grid .label { color: #888; font-size: 0.85rem; }
-        .weather-grid .value { color: #333; font-size: 1.1rem; font-weight: bold; }
-        #weather-location { font-size: 1.3rem; font-weight: bold; color: #4a90e2; margin-bottom: 1rem; }
-        #weather-status { color: #aaa; font-style: italic; }
+        .weather-grid .label { color: var(--faded); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; }
+        .weather-grid .value { font-family: 'IM Fell English SC', serif; color: #5a3d1d; font-size: 1.25rem; }
+        #weather-location { font-family: 'IM Fell English SC', serif; font-size: 1.45rem; color: #6e4a1e; margin-bottom: 1rem; }
+        #weather-status { color: var(--faded); font-style: italic; }
 
         /* Chat */
         #chat-box {
             height: 220px;
             overflow-y: auto;
-            border: 1px solid #e0e0e0;
+            border: 2px solid var(--brass-d);
             border-radius: 6px;
             padding: 0.75rem;
             margin-bottom: 0.75rem;
             text-align: left;
-            background: #fafafa;
+            background: #efe1c0;
+            box-shadow: inset 0 0 12px rgba(94,63,28,0.3);
         }
+        #chat-box::-webkit-scrollbar { width: 10px; }
+        #chat-box::-webkit-scrollbar-track { background: #d9c595; }
+        #chat-box::-webkit-scrollbar-thumb { background: var(--brass); border-radius: 5px; border: 1px solid var(--brass-d); }
         .chat-msg { margin: 0.3rem 0; font-size: 0.95rem; }
-        .chat-msg .who { font-weight: bold; color: #4a90e2; }
-        .chat-msg .txt { color: #333; }
+        .chat-msg .who { font-weight: bold; color: var(--copper); }
+        .chat-msg .txt { color: var(--ink); }
         .chat-inputs { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: stretch; }
         .chat-inputs input {
             flex: 1;
             min-width: 0;
+            font-family: 'Special Elite', monospace;
             padding: 0.4rem 0.7rem;
-            border: 1px solid #ddd;
+            border: 2px solid var(--brass-d);
             border-radius: 5px;
             font-size: 0.95rem;
+            color: var(--ink);
+            background: #f6ecd2;
             outline: none;
         }
-        .chat-inputs input:focus { border-color: #4a90e2; }
+        .chat-inputs input::placeholder { color: #b09a6a; }
+        .chat-inputs input:focus { border-color: var(--copper); box-shadow: 0 0 6px rgba(164,88,43,0.4); }
         .chat-inputs button {
             flex-shrink: 0;
             padding: 0.4rem 1rem;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
             white-space: nowrap;
         }
-        #chat-status { font-size: 0.75rem; color: #bbb; min-height: 1rem; }
+        #chat-status { font-size: 0.75rem; color: var(--faded); min-height: 1rem; letter-spacing: 1px; }
 
         /* Joke of the Day */
-        #joke-setup { color: #333; font-size: 1.1rem; margin-bottom: 0.75rem; }
-        #joke-punchline { color: #4a90e2; font-size: 1.2rem; font-weight: bold; min-height: 1.4rem; }
-        #joke-date { font-size: 0.75rem; color: #bbb; margin-top: 0.75rem; min-height: 1rem; }
+        #joke-setup { font-family: 'IM Fell English SC', serif; color: var(--ink); font-size: 1.2rem; margin-bottom: 0.75rem; }
+        #joke-punchline { font-family: 'IM Fell English SC', serif; color: var(--rust); font-size: 1.35rem; min-height: 1.4rem; }
+        #joke-date { font-size: 0.75rem; color: var(--faded); margin-top: 0.75rem; min-height: 1rem; letter-spacing: 1px; }
         #joke-reveal { margin-top: 1rem; }
+
+        /* Brass nameplate (games) */
+        .nameplate {
+            display: flex;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.75rem 1.5rem;
+        }
+        .nameplate a {
+            font-family: 'Special Elite', monospace;
+            font-size: 13px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            text-decoration: none;
+            text-shadow: 1px 1px 0 rgba(231,201,139,0.6);
+        }
+        .nameplate a:hover { text-decoration: underline; }
+        .game-invaders { color: #3f6f4f; }
+        .game-parking  { color: #8a5a1e; }
     </style>
 </head>
 <body>
-    <div class="card" style="display:flex;justify-content:space-between;gap:1rem;padding:0.75rem 1.5rem;">
-        <a href="/game.html" style="color:#69f0ae;font:bold 13px monospace;text-decoration:none;">🕹 SPACE INVADERS →</a>
-        <a href="/parking.html" style="color:#ffd54f;font:bold 13px monospace;text-decoration:none;">🚗 VALET PARKING →</a>
+    <div class="card nameplate">
+        <a href="/game.html" class="game-invaders">🕹 SPACE INVADERS →</a>
+        <a href="/parking.html" class="game-parking">🚗 VALET PARKING →</a>
     </div>
 
     <div class="card">
@@ -115,7 +205,7 @@
         <h2>Weather at Your Location</h2>
         <div id="weather-location" style="display:none"></div>
         <div id="weather-status">Fetching weather...</div>
-        <div id="w-updated" style="font-size:0.75rem;color:#bbb;margin-top:0.5rem;min-height:1rem"></div>
+        <div id="w-updated" style="font-size:0.75rem;color:#9a8050;margin-top:0.5rem;min-height:1rem;letter-spacing:1px"></div>
         <div id="weather-grid" class="weather-grid" style="display:none">
             <span class="label">Condition</span>  <span class="value" id="w-desc"></span>
             <span class="label">Temperature</span> <span class="value" id="w-temp"></span>
