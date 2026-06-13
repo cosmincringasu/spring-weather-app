@@ -354,7 +354,7 @@
     frame++;
 
     if (gs === 'title') {
-      if (pressGas()) { gs = 'select'; }
+      if (pressGas()) { gs = 'select'; gasEdge = true; }   // require a fresh press to confirm a vehicle
       return;
     }
 
