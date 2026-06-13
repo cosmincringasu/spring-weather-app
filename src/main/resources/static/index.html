@@ -70,9 +70,10 @@
         .chat-msg { margin: 0.3rem 0; font-size: 0.95rem; }
         .chat-msg .who { font-weight: bold; color: #4a90e2; }
         .chat-msg .txt { color: #333; }
-        .chat-inputs { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+        .chat-inputs { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; align-items: stretch; }
         .chat-inputs input {
             flex: 1;
+            min-width: 0;
             padding: 0.4rem 0.7rem;
             border: 1px solid #ddd;
             border-radius: 5px;
@@ -80,6 +81,12 @@
             outline: none;
         }
         .chat-inputs input:focus { border-color: #4a90e2; }
+        .chat-inputs button {
+            flex-shrink: 0;
+            padding: 0.4rem 1rem;
+            font-size: 0.95rem;
+            white-space: nowrap;
+        }
         #chat-status { font-size: 0.75rem; color: #bbb; min-height: 1rem; }
     </style>
 </head>
