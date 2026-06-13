@@ -13,8 +13,10 @@
             align-items: center;
             min-height: 100vh;
             margin: 0;
+            padding: 2rem 0;
             gap: 1.5rem;
             background-color: #f0f2f5;
+            box-sizing: border-box;
         }
         .card {
             background: white;
@@ -23,28 +25,14 @@
             box-shadow: 0 2px 8px rgba(0,0,0,0.15);
             text-align: center;
             min-width: 320px;
+            width: 100%;
+            max-width: 480px;
+            box-sizing: border-box;
         }
-        h1 {
-            color: #333;
-            font-size: 2rem;
-            margin: 0 0 1rem;
-        }
-        h2 {
-            color: #555;
-            font-size: 1.2rem;
-            margin: 0 0 1rem;
-        }
-        #message {
-            font-size: 1.8rem;
-            color: #4a90e2;
-            font-weight: bold;
-            margin-bottom: 1.5rem;
-        }
-        .buttons {
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-        }
+        h1 { color: #333; font-size: 2rem; margin: 0 0 1rem; }
+        h2 { color: #555; font-size: 1.2rem; margin: 0 0 1rem; }
+        #message { font-size: 1.8rem; color: #4a90e2; font-weight: bold; margin-bottom: 1.5rem; }
+        .buttons { display: flex; gap: 1rem; justify-content: center; }
         button {
             padding: 0.5rem 1.2rem;
             font-size: 1rem;
@@ -55,6 +43,7 @@
             color: white;
         }
         button:hover { background-color: #357abd; }
+        button:disabled { background-color: #aaa; cursor: default; }
         .weather-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -64,13 +53,34 @@
         }
         .weather-grid .label { color: #888; font-size: 0.85rem; }
         .weather-grid .value { color: #333; font-size: 1.1rem; font-weight: bold; }
-        #weather-location {
-            font-size: 1.3rem;
-            font-weight: bold;
-            color: #4a90e2;
-            margin-bottom: 1rem;
-        }
+        #weather-location { font-size: 1.3rem; font-weight: bold; color: #4a90e2; margin-bottom: 1rem; }
         #weather-status { color: #aaa; font-style: italic; }
+
+        /* Chat */
+        #chat-box {
+            height: 220px;
+            overflow-y: auto;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 0.75rem;
+            margin-bottom: 0.75rem;
+            text-align: left;
+            background: #fafafa;
+        }
+        .chat-msg { margin: 0.3rem 0; font-size: 0.95rem; }
+        .chat-msg .who { font-weight: bold; color: #4a90e2; }
+        .chat-msg .txt { color: #333; }
+        .chat-inputs { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
+        .chat-inputs input {
+            flex: 1;
+            padding: 0.4rem 0.7rem;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 0.95rem;
+            outline: none;
+        }
+        .chat-inputs input:focus { border-color: #4a90e2; }
+        #chat-status { font-size: 0.75rem; color: #bbb; min-height: 1rem; }
     </style>
 </head>
 <body>
@@ -95,7 +105,21 @@
         </div>
     </div>
 
+    <div class="card">
+        <h2>Live Chat</h2>
+        <div class="chat-inputs">
+            <input id="username" type="text" placeholder="Your name" style="max-width:120px" />
+            <input id="chat-input" type="text" placeholder="Type a message..." />
+            <button id="send-btn" onclick="sendMessage()" disabled>Send</button>
+        </div>
+        <div id="chat-box"></div>
+        <div id="chat-status">Connecting...</div>
+    </div>
+
+    <script src="/webjars/sockjs-client/sockjs.min.js"></script>
+    <script src="/webjars/stomp-websocket/stomp.min.js"></script>
     <script>
+        // Greet endpoints
         function greet(url) {
             fetch(url)
                 .then(res => res.text())
@@ -103,6 +127,7 @@
                 .catch(() => document.getElementById('message').textContent = 'Error fetching message');
         }
 
+        // Weather
         function loadWeather() {
             fetch('/api/weather')
                 .then(res => res.json())
@@ -120,9 +145,47 @@
                     document.getElementById('weather-status').textContent = 'Could not load weather.';
                 });
         }
-
         loadWeather();
         setInterval(loadWeather, 60000);
+
+        // Chat
+        const socket = new SockJS('/ws');
+        const stomp = Stomp.over(socket);
+        stomp.debug = null;
+
+        stomp.connect({}, () => {
+            document.getElementById('chat-status').textContent = 'Connected';
+            document.getElementById('send-btn').disabled = false;
+
+            stomp.subscribe('/topic/messages', frame => {
+                const msg = JSON.parse(frame.body);
+                const box = document.getElementById('chat-box');
+                const el = document.createElement('div');
+                el.className = 'chat-msg';
+                el.innerHTML = `<span class="who">${escapeHtml(msg.username)}:</span> <span class="txt">${escapeHtml(msg.text)}</span>`;
+                box.appendChild(el);
+                box.scrollTop = box.scrollHeight;
+            });
+        }, () => {
+            document.getElementById('chat-status').textContent = 'Disconnected — reload to reconnect';
+            document.getElementById('send-btn').disabled = true;
+        });
+
+        function sendMessage() {
+            const username = document.getElementById('username').value.trim() || 'Anonymous';
+            const text = document.getElementById('chat-input').value.trim();
+            if (!text) return;
+            stomp.send('/app/chat', {}, JSON.stringify({ username, text }));
+            document.getElementById('chat-input').value = '';
+        }
+
+        document.getElementById('chat-input').addEventListener('keydown', e => {
+            if (e.key === 'Enter') sendMessage();
+        });
+
+        function escapeHtml(str) {
+            return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
     </script>
 </body>
 </html>
