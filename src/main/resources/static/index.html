@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hello World</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            gap: 1.5rem;
+            background-color: #f0f2f5;
+        }
+        .card {
+            background: white;
+            padding: 2rem 3rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            text-align: center;
+            min-width: 320px;
+        }
+        h1 {
+            color: #333;
+            font-size: 2rem;
+            margin: 0 0 1rem;
+        }
+        h2 {
+            color: #555;
+            font-size: 1.2rem;
+            margin: 0 0 1rem;
+        }
+        #message {
+            font-size: 1.8rem;
+            color: #4a90e2;
+            font-weight: bold;
+            margin-bottom: 1.5rem;
+        }
+        .buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+        button {
+            padding: 0.5rem 1.2rem;
+            font-size: 1rem;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            background-color: #4a90e2;
+            color: white;
+        }
+        button:hover { background-color: #357abd; }
+        .weather-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem 1.5rem;
+            text-align: left;
+            margin-top: 0.5rem;
+        }
+        .weather-grid .label { color: #888; font-size: 0.85rem; }
+        .weather-grid .value { color: #333; font-size: 1.1rem; font-weight: bold; }
+        #weather-location {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #4a90e2;
+            margin-bottom: 1rem;
+        }
+        #weather-status { color: #aaa; font-style: italic; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>Spring Boot REST API</h1>
+        <div id="message">Click a button...</div>
+        <div class="buttons">
+            <button onclick="greet('/api/hello')">Hello World</button>
+            <button onclick="greet('/api/hello/maria')">Hello Maria</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Weather at Your Location</h2>
+        <div id="weather-location" style="display:none"></div>
+        <div id="weather-status">Fetching weather...</div>
+        <div id="w-updated" style="font-size:0.75rem;color:#bbb;margin-top:0.5rem;min-height:1rem"></div>
+        <div id="weather-grid" class="weather-grid" style="display:none">
+            <span class="label">Condition</span>  <span class="value" id="w-desc"></span>
+            <span class="label">Temperature</span> <span class="value" id="w-temp"></span>
+            <span class="label">Wind speed</span>  <span class="value" id="w-wind"></span>
+        </div>
+    </div>
+
+    <script>
+        function greet(url) {
+            fetch(url)
+                .then(res => res.text())
+                .then(text => document.getElementById('message').textContent = text)
+                .catch(() => document.getElementById('message').textContent = 'Error fetching message');
+        }
+
+        function loadWeather() {
+            fetch('/api/weather')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('weather-status').style.display = 'none';
+                    document.getElementById('weather-location').textContent = data.city + ', ' + data.country;
+                    document.getElementById('weather-location').style.display = 'block';
+                    document.getElementById('w-desc').textContent = data.description;
+                    document.getElementById('w-temp').textContent = data.temperature + ' °C';
+                    document.getElementById('w-wind').textContent = data.windspeed + ' km/h';
+                    document.getElementById('weather-grid').style.display = 'grid';
+                    document.getElementById('w-updated').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+                })
+                .catch(() => {
+                    document.getElementById('weather-status').textContent = 'Could not load weather.';
+                });
+        }
+
+        loadWeather();
+        setInterval(loadWeather, 60000);
+    </script>
+</body>
+</html>
