@@ -88,6 +88,12 @@
             white-space: nowrap;
         }
         #chat-status { font-size: 0.75rem; color: #bbb; min-height: 1rem; }
+
+        /* Joke of the Day */
+        #joke-setup { color: #333; font-size: 1.1rem; margin-bottom: 0.75rem; }
+        #joke-punchline { color: #4a90e2; font-size: 1.2rem; font-weight: bold; min-height: 1.4rem; }
+        #joke-date { font-size: 0.75rem; color: #bbb; margin-top: 0.75rem; min-height: 1rem; }
+        #joke-reveal { margin-top: 1rem; }
     </style>
 </head>
 <body>
@@ -114,6 +120,16 @@
             <span class="label">Temperature</span> <span class="value" id="w-temp"></span>
             <span class="label">Wind speed</span>  <span class="value" id="w-wind"></span>
         </div>
+    </div>
+
+    <div class="card">
+        <h2>Joke of the Day</h2>
+        <div id="joke-setup">Loading today's joke...</div>
+        <div id="joke-punchline"></div>
+        <div id="joke-reveal" style="display:none">
+            <button onclick="revealPunchline()">Reveal punchline</button>
+        </div>
+        <div id="joke-date"></div>
     </div>
 
     <div class="card">
@@ -158,6 +174,30 @@
         }
         loadWeather();
         setInterval(loadWeather, 60000);
+
+        // Joke of the Day
+        function loadJoke() {
+            fetch('/api/joke')
+                .then(res => res.json())
+                .then(data => {
+                    document.getElementById('joke-setup').textContent = data.setup;
+                    document.getElementById('joke-punchline').textContent = '';
+                    document.getElementById('joke-punchline').dataset.text = data.punchline;
+                    document.getElementById('joke-reveal').style.display = 'block';
+                    document.getElementById('joke-date').textContent = 'Joke for ' + data.date;
+                })
+                .catch(() => {
+                    document.getElementById('joke-setup').textContent = 'Could not load the joke of the day.';
+                });
+        }
+
+        function revealPunchline() {
+            const el = document.getElementById('joke-punchline');
+            el.textContent = el.dataset.text || '';
+            document.getElementById('joke-reveal').style.display = 'none';
+        }
+
+        loadJoke();
 
         // Chat
         const socket = new SockJS('/ws');
