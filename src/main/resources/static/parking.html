@@ -89,54 +89,112 @@
   <script>
   const canvas = document.getElementById('c');
   const ctx = canvas.getContext('2d');
-  const W = 400, H = 580, M = 6;        // M = wall margin
+  const W = 400, H = 580, M = 6;          // M = wall margin
 
-  // ---- CAR PHYSICS ----
-  const CAR_L = 46, CAR_W = 24;
-  const ACCEL = 0.07, MAX_FWD = 2.8, MAX_REV = 1.5;
-  const FRICTION = 0.96, TURN = 0.052;
+  // ---- VEHICLES (different stats) ----
+  // units[0] = cab/body, units[1..] = trailers. wb is hitch-spacing for trailers.
+  const VEHICLES = [
+    { key:'car',     name:'HATCHBACK',  color:'#ffd54f',
+      units:[{len:46,wid:24}],
+      maxFwd:2.8, maxRev:1.6, accel:0.085, turn:0.055, friction:0.96 },
+    { key:'sport',   name:'SPORTS CAR', color:'#ff5252',
+      units:[{len:50,wid:23}],
+      maxFwd:4.3, maxRev:1.9, accel:0.14, turn:0.050, friction:0.978 },
+    { key:'tractor', name:'TRACTOR',    color:'#9ccc65',
+      units:[{len:42,wid:26}],
+      maxFwd:1.9, maxRev:1.3, accel:0.075, turn:0.090, friction:0.93 },
+    { key:'tank',    name:'TANK',       color:'#66bb6a', tank:true,
+      units:[{len:52,wid:34}],
+      maxFwd:1.7, maxRev:1.3, accel:0.06, turn:0.032, friction:0.9 },
+    { key:'truck',   name:'TRUCK x2',   color:'#42a5f5',
+      units:[{len:48,wid:26},{len:60,wid:26},{len:60,wid:26}],
+      maxFwd:2.1, maxRev:1.1, accel:0.06, turn:0.044, friction:0.95 }
+  ];
 
-  // ---- LEVELS ----
-  // target.angle: 0 = car stands vertical, PI/2 = car lies horizontal
+  // ---- LEVELS (10, gradually harder; later ones add moving traffic) ----
   const LEVELS = [
-    {
-      name: 'WARM-UP',
-      start: { x: 200, y: 505, angle: 0 },
-      target: { x: 164, y: 34, w: 72, h: 120, angle: 0 },
-      obstacles: [
-        { x: 66, y: 40, w: 60, h: 110 },
-        { x: 274, y: 40, w: 60, h: 110 }
-      ]
-    },
-    {
-      name: 'TURN IN',
-      start: { x: 300, y: 500, angle: 0 },
-      target: { x: 22, y: 232, w: 120, h: 72, angle: Math.PI / 2 },
-      obstacles: [
-        { x: 22, y: 110, w: 108, h: 96 },
-        { x: 22, y: 330, w: 108, h: 96 },
-        { x: 250, y: 70, w: 128, h: 40 }
-      ]
-    },
-    {
-      name: 'TIGHT SPOT',
-      start: { x: 205, y: 505, angle: 0 },
-      target: { x: 164, y: 232, w: 72, h: 116, angle: 0 },
-      obstacles: [
-        { x: 78, y: 236, w: 58, h: 108 },
-        { x: 264, y: 236, w: 58, h: 108 },
-        { x: 120, y: 60, w: 160, h: 56 },
-        { x: 300, y: 380, w: 60, h: 150 }
-      ]
-    }
+    { name:'TUTORIAL', tutorial:true, start:{x:200,y:505,angle:0},
+      bay:{x:164,y:44,w:74,h:122,angle:0}, obs:[], mov:[] },
+
+    { name:'FIRST BAY', start:{x:200,y:505,angle:0},
+      bay:{x:164,y:38,w:74,h:120,angle:0},
+      obs:[{x:68,y:46,w:58,h:108},{x:274,y:46,w:58,h:108}], mov:[] },
+
+    { name:'TURN IN', start:{x:300,y:500,angle:0},
+      bay:{x:22,y:232,w:120,h:74,angle:Math.PI/2},
+      obs:[{x:22,y:108,w:108,h:96},{x:22,y:332,w:108,h:94},{x:252,y:70,w:126,h:40}], mov:[] },
+
+    { name:'PARALLEL', start:{x:150,y:470,angle:0},
+      bay:{x:298,y:230,w:74,h:152,angle:0},
+      obs:[{x:298,y:68,w:74,h:150},{x:298,y:402,w:74,h:150}], mov:[] },
+
+    { name:'TRAFFIC', start:{x:200,y:510,angle:0},
+      bay:{x:164,y:38,w:74,h:118,angle:0},
+      obs:[{x:68,y:46,w:58,h:104},{x:274,y:46,w:58,h:104}],
+      mov:[{x:40,y:300,w:62,h:30,axis:'x',lo:M,hi:W-M,dir:1,speed:1.5}] },
+
+    { name:'CROSSFIRE', start:{x:205,y:512,angle:0},
+      bay:{x:164,y:236,w:72,h:116,angle:0},
+      obs:[{x:76,y:240,w:58,h:108},{x:266,y:240,w:58,h:108},{x:120,y:64,w:160,h:54}],
+      mov:[{x:200,y:438,w:62,h:30,axis:'x',lo:M,hi:W-M,dir:-1,speed:1.8}] },
+
+    { name:'SIDE STREET', start:{x:300,y:500,angle:0},
+      bay:{x:22,y:40,w:120,h:74,angle:Math.PI/2},
+      obs:[{x:22,y:150,w:108,h:96},{x:250,y:60,w:128,h:46}],
+      mov:[{x:185,y:130,w:30,h:64,axis:'y',lo:M,hi:H-M,dir:1,speed:1.7}] },
+
+    { name:'RUSH HOUR', start:{x:200,y:512,angle:0},
+      bay:{x:164,y:36,w:72,h:116,angle:0},
+      obs:[{x:58,y:44,w:58,h:100},{x:284,y:44,w:58,h:100}],
+      mov:[{x:40,y:248,w:62,h:30,axis:'x',lo:M,hi:W-M,dir:1,speed:1.9},
+           {x:300,y:402,w:62,h:30,axis:'x',lo:M,hi:W-M,dir:-1,speed:1.6}] },
+
+    { name:'GRIDLOCK', start:{x:200,y:514,angle:0},
+      bay:{x:164,y:236,w:70,h:112,angle:0},
+      obs:[{x:78,y:240,w:54,h:104},{x:268,y:240,w:54,h:104},{x:120,y:66,w:160,h:50},
+           {x:30,y:432,w:90,h:40},{x:280,y:432,w:90,h:40}],
+      mov:[{x:40,y:180,w:60,h:28,axis:'x',lo:M,hi:W-M,dir:1,speed:2.0},
+           {x:300,y:330,w:60,h:28,axis:'x',lo:M,hi:W-M,dir:-1,speed:1.8},
+           {x:185,y:120,w:28,h:60,axis:'y',lo:60,hi:232,dir:1,speed:1.6}] },
+
+    { name:'VALET BOSS', start:{x:200,y:516,angle:0},
+      bay:{x:300,y:42,w:72,h:120,angle:0},
+      obs:[{x:30,y:60,w:120,h:50},{x:172,y:60,w:104,h:50},{x:300,y:182,w:72,h:88},
+           {x:30,y:206,w:92,h:40},{x:150,y:236,w:96,h:40},
+           {x:30,y:322,w:120,h:46},{x:244,y:322,w:124,h:46}],
+      mov:[{x:40,y:430,w:60,h:28,axis:'x',lo:M,hi:W-M,dir:1,speed:2.1},
+           {x:300,y:486,w:60,h:28,axis:'x',lo:M,hi:W-M,dir:-1,speed:1.9},
+           {x:185,y:150,w:28,h:60,axis:'y',lo:150,hi:430,dir:1,speed:1.7}] }
   ];
 
   // ---- STATE ----
-  let gs = 'start';                 // start | playing | crash | levelup | win
-  let level = 0, lives, frame = 0, levelFrame = 0;
-  let totalFrames = 0, crashTimer = 0, levelupTimer = 0, parkGlow = 0;
-  let bestTime = +localStorage.getItem('vp_best') || 0;
-  const car = { x: 0, y: 0, angle: 0, speed: 0 };
+  let gs = 'title';   // title | select | playing | crash | levelup | win
+  let level = 0, lives, frame = 0, totalFrames = 0;
+  let crashTimer = 0, levelupTimer = 0, parkGlow = 0;
+  let selIndex = 0;
+  let bestTime = +localStorage.getItem('vp_best2') || 0;
+
+  // tutorial
+  let tutStep = 0, tutStartAngle = 0;
+  const TUT_TIPS = [
+    'Hold GAS to drive forward',
+    'Steer ◀ ▶ while moving to turn',
+    'REV reverses — steering flips, like real life',
+    'Ease fully inside the green P and stop'
+  ];
+
+  // player vehicle
+  const player = {
+    spec: VEHICLES[0],
+    cab: VEHICLES[0].units[0],
+    trailers: [],
+    C: { x: 0, y: 0 },
+    heading: 0,
+    speed: 0,
+    tnodes: []          // trailer hitch chain: [hitch, rear1, rear2...]
+  };
+
+  let movers = [];      // live copy of current level's moving cars
 
   // ---- INPUT ----
   const keys = {};
@@ -147,6 +205,7 @@
   addEventListener('keyup', e => { keys[e.code] = false; });
 
   let tLeft = false, tRight = false, tGas = false, tRev = false;
+  let gasEdge = false, leftEdge = false, rightEdge = false;
   function bindBtn(id, set) {
     const el = document.getElementById(id);
     const on  = e => { e.preventDefault(); set(true);  };
@@ -163,30 +222,54 @@
   bindBtn('btn-gas',   v => tGas   = v);
   bindBtn('btn-rev',   v => tRev   = v);
 
+  function pressGas()   { return keys['Space'] || keys['ArrowUp'] || keys['KeyW'] || tGas; }
+  function pressRev()   { return keys['ArrowDown'] || keys['KeyS'] || tRev; }
+  function steerInput() {
+    return (keys['ArrowLeft']||keys['KeyA']||tLeft ? -1 : 0)
+         + (keys['ArrowRight']||keys['KeyD']||tRight ? 1 : 0);
+  }
+
   // ---- GEOMETRY ----
-  function carSamples(c) {       // 9 points: corners, edge-mids, centre
-    const fa = { x: Math.sin(c.angle), y: -Math.cos(c.angle) };
-    const ra = { x: Math.cos(c.angle), y: Math.sin(c.angle) };
-    const hl = CAR_L / 2, hw = CAR_W / 2, pts = [];
-    for (const fl of [hl, 0, -hl])
-      for (const rw of [hw, 0, -hw])
-        pts.push({ x: c.x + fa.x*fl + ra.x*rw, y: c.y + fa.y*fl + ra.y*rw });
-    return pts;
-  }
-  function carCorners(c) {
-    const fa = { x: Math.sin(c.angle), y: -Math.cos(c.angle) };
-    const ra = { x: Math.cos(c.angle), y: Math.sin(c.angle) };
-    const hl = CAR_L / 2, hw = CAR_W / 2;
-    return [[hl,hw],[hl,-hw],[-hl,hw],[-hl,-hw]].map(([fl,rw]) =>
-      ({ x: c.x + fa.x*fl + ra.x*rw, y: c.y + fa.y*fl + ra.y*rw }));
-  }
+  function vecAngle(dx, dy) { return Math.atan2(dx, -dy); }   // inverse of forward=(sin a,-cos a)
   function inRect(p, r) { return p.x > r.x && p.x < r.x+r.w && p.y > r.y && p.y < r.y+r.h; }
 
-  function collides(c) {
-    const pts = carSamples(c);
-    for (const p of pts) {
-      if (p.x < M || p.x > W-M || p.y < M || p.y > H-M) return true;
-      for (const o of LEVELS[level].obstacles) if (inRect(p, o)) return true;
+  function rectSamples(re) {            // 9 sample points of an oriented rect
+    const fa = { x: Math.sin(re.a), y: -Math.cos(re.a) };
+    const ra = { x: Math.cos(re.a), y: Math.sin(re.a) };
+    const hl = re.len/2, hw = re.wid/2, pts = [];
+    for (const fl of [hl, 0, -hl])
+      for (const rw of [hw, 0, -hw])
+        pts.push({ x: re.cx + fa.x*fl + ra.x*rw, y: re.cy + fa.y*fl + ra.y*rw });
+    return pts;
+  }
+  function rectCorners(re) {
+    const fa = { x: Math.sin(re.a), y: -Math.cos(re.a) };
+    const ra = { x: Math.cos(re.a), y: Math.sin(re.a) };
+    const hl = re.len/2, hw = re.wid/2;
+    return [[hl,hw],[hl,-hw],[-hl,hw],[-hl,-hw]].map(([fl,rw]) =>
+      ({ x: re.cx + fa.x*fl + ra.x*rw, y: re.cy + fa.y*fl + ra.y*rw }));
+  }
+
+  // all oriented rectangles making up the player vehicle
+  function vehicleRects() {
+    const rects = [{ cx: player.C.x, cy: player.C.y, a: player.heading,
+                     len: player.cab.len, wid: player.cab.wid }];
+    for (let i = 0; i < player.trailers.length; i++) {
+      const a = player.tnodes[i], b = player.tnodes[i+1];
+      rects.push({ cx: (a.x+b.x)/2, cy: (a.y+b.y)/2, a: vecAngle(a.x-b.x, a.y-b.y),
+                   len: player.trailers[i].len, wid: player.trailers[i].wid });
+    }
+    return rects;
+  }
+
+  function collides() {
+    const rects = vehicleRects();
+    for (const re of rects) {
+      for (const p of rectSamples(re)) {
+        if (p.x < M || p.x > W-M || p.y < M || p.y > H-M) return true;
+        for (const o of LEVELS[level].obs) if (inRect(p, o)) return true;
+        for (const m of movers) if (inRect(p, m)) return true;
+      }
     }
     return false;
   }
@@ -196,43 +279,106 @@
     while (d >  Math.PI) d -= 2*Math.PI;
     while (d < -Math.PI) d += 2*Math.PI;
     d = Math.abs(d);
-    return Math.min(d, Math.abs(Math.PI - d)) < 0.30;   // allow nose-in or nose-out
+    return Math.min(d, Math.abs(Math.PI - d)) < 0.30;   // nose-in or nose-out both count
   }
 
-  function isParked(c) {
-    const t = LEVELS[level].target;
-    const pad = 4;
-    const box = { x: t.x - pad, y: t.y - pad, w: t.w + 2*pad, h: t.h + 2*pad };
-    if (!inRect({ x: c.x, y: c.y }, t)) return false;
-    if (!carCorners(c).every(p => inRect(p, box))) return false;
-    if (Math.abs(c.speed) > 0.4) return false;
-    return aligned(c.angle, t.angle);
+  function isParked() {
+    const t = LEVELS[level].bay;
+    if (Math.abs(player.speed) > 0.4) return false;
+    if (!aligned(player.heading, t.angle)) return false;
+    if (!inRect(player.C, t)) return false;
+    const pad = 5;
+    const box = { x: t.x-pad, y: t.y-pad, w: t.w+2*pad, h: t.h+2*pad };
+    const cab = { cx: player.C.x, cy: player.C.y, a: player.heading,
+                  len: player.cab.len, wid: player.cab.wid };
+    return rectCorners(cab).every(p => inRect(p, box));
   }
 
   // ---- FLOW ----
+  function buildPlayer(spec) {
+    player.spec = spec;
+    player.cab = spec.units[0];
+    player.trailers = spec.units.slice(1);
+  }
   function loadLevel(i) {
-    const s = LEVELS[i].start;
-    car.x = s.x; car.y = s.y; car.angle = s.angle; car.speed = 0;
-    levelFrame = 0;
+    const L = LEVELS[i], s = L.start;
+    player.C = { x: s.x, y: s.y };
+    player.heading = s.angle;
+    player.speed = 0;
+    const f = { x: Math.sin(s.angle), y: -Math.cos(s.angle) };
+    let prev = { x: s.x - f.x*player.cab.len*0.42, y: s.y - f.y*player.cab.len*0.42 };
+    player.tnodes = [ { ...prev } ];
+    for (const t of player.trailers) {
+      const link = t.len * 0.9;
+      prev = { x: prev.x - f.x*link, y: prev.y - f.y*link };
+      player.tnodes.push({ ...prev });
+    }
+    movers = (L.mov || []).map(m => ({ ...m }));
+    if (L.tutorial) { tutStep = 0; tutStartAngle = s.angle; }
   }
   function startGame() {
+    buildPlayer(VEHICLES[selIndex]);
     level = 0; lives = 3; totalFrames = 0; parkGlow = 0;
     loadLevel(0); gs = 'playing';
+  }
+
+  function updateTrailers() {
+    const f = { x: Math.sin(player.heading), y: -Math.cos(player.heading) };
+    player.tnodes[0] = { x: player.C.x - f.x*player.cab.len*0.42,
+                         y: player.C.y - f.y*player.cab.len*0.42 };
+    for (let i = 0; i < player.trailers.length; i++) {
+      const link = player.trailers[i].len * 0.9;
+      const prev = player.tnodes[i];
+      let dx = player.tnodes[i+1].x - prev.x, dy = player.tnodes[i+1].y - prev.y;
+      let d = Math.hypot(dx, dy) || link;
+      player.tnodes[i+1] = { x: prev.x + dx/d*link, y: prev.y + dy/d*link };
+    }
+  }
+
+  function updateMovers() {
+    for (const m of movers) {
+      if (m.axis === 'x') {
+        m.x += m.dir * m.speed;
+        if (m.x < m.lo) { m.x = m.lo; m.dir = 1; }
+        if (m.x + m.w > m.hi) { m.x = m.hi - m.w; m.dir = -1; }
+      } else {
+        m.y += m.dir * m.speed;
+        if (m.y < m.lo) { m.y = m.lo; m.dir = 1; }
+        if (m.y + m.h > m.hi) { m.y = m.hi - m.h; m.dir = -1; }
+      }
+    }
   }
 
   // ---- UPDATE ----
   function update() {
     frame++;
 
-    if (gs === 'start' || gs === 'win') {
-      if (keys['Space'] || tGas) { tGas = false; startGame(); }
+    if (gs === 'title') {
+      if (pressGas()) { gs = 'select'; }
+      return;
+    }
+
+    if (gs === 'select') {
+      const s = steerInput();
+      if (s < 0 && !leftEdge)  { selIndex = (selIndex + VEHICLES.length - 1) % VEHICLES.length; }
+      if (s > 0 && !rightEdge) { selIndex = (selIndex + 1) % VEHICLES.length; }
+      leftEdge  = (keys['ArrowLeft']||keys['KeyA']||tLeft);
+      rightEdge = (keys['ArrowRight']||keys['KeyD']||tRight);
+      if (pressGas() && !gasEdge) startGame();
+      gasEdge = pressGas();
+      return;
+    }
+    gasEdge = pressGas();
+
+    if (gs === 'win') {
+      if (pressGas() && !gasEdge) { gs = 'title'; }
       return;
     }
 
     if (gs === 'crash') {
       crashTimer--;
       if (crashTimer <= 0) {
-        if (lives <= 0) { gs = 'start'; }
+        if (lives <= 0) gs = 'title';
         else { loadLevel(level); gs = 'playing'; }
       }
       return;
@@ -244,7 +390,7 @@
         level++;
         if (level >= LEVELS.length) {
           if (bestTime === 0 || totalFrames < bestTime) {
-            bestTime = totalFrames; localStorage.setItem('vp_best', bestTime);
+            bestTime = totalFrames; localStorage.setItem('vp_best2', bestTime);
           }
           gs = 'win';
         } else { loadLevel(level); gs = 'playing'; }
@@ -252,36 +398,43 @@
       return;
     }
 
-    // playing
-    levelFrame++; totalFrames++;
+    // ---- PLAYING ----
+    totalFrames++;
     if (parkGlow > 0) parkGlow--;
+    updateMovers();
 
-    const gas = keys['ArrowUp'] || keys['KeyW'] || tGas;
-    const rev = keys['ArrowDown'] || keys['KeyS'] || tRev;
-    if (gas)       car.speed = Math.min(MAX_FWD, car.speed + ACCEL);
-    else if (rev)  car.speed = Math.max(-MAX_REV, car.speed - ACCEL);
-    else { car.speed *= FRICTION; if (Math.abs(car.speed) < 0.02) car.speed = 0; }
+    const spec = player.spec;
+    if (pressGas())      player.speed = Math.min(spec.maxFwd, player.speed + spec.accel);
+    else if (pressRev()) player.speed = Math.max(-spec.maxRev, player.speed - spec.accel);
+    else { player.speed *= spec.friction; if (Math.abs(player.speed) < 0.02) player.speed = 0; }
 
-    const steer = (keys['ArrowLeft']||keys['KeyA']||tLeft ? -1 : 0)
-                + (keys['ArrowRight']||keys['KeyD']||tRight ? 1 : 0);
-    // turn rate scales with speed and its sign (reverse flips steering, like a real car)
-    car.angle += steer * TURN * (car.speed / MAX_FWD);
+    const steer = steerInput();
+    if (spec.tank) player.heading += steer * spec.turn;                         // rotate in place
+    else           player.heading += steer * spec.turn * (player.speed / spec.maxFwd);
 
-    const nx = car.x + Math.sin(car.angle) * car.speed;
-    const ny = car.y - Math.cos(car.angle) * car.speed;
-    const prev = { x: car.x, y: car.y };
-    car.x = nx; car.y = ny;
+    // snapshot for collision revert
+    const prevC = { ...player.C }, prevH = player.heading - 0;
+    const prevNodes = player.tnodes.map(n => ({ ...n }));
 
-    if (collides(car)) {
-      car.x = prev.x; car.y = prev.y;
-      lives--;
-      gs = 'crash'; crashTimer = 70; car.speed = 0;
+    const f = { x: Math.sin(player.heading), y: -Math.cos(player.heading) };
+    player.C = { x: player.C.x + f.x*player.speed, y: player.C.y + f.y*player.speed };
+    updateTrailers();
+
+    if (collides()) {
+      player.C = prevC; player.heading = prevH; player.tnodes = prevNodes;
+      player.speed = 0;
+      lives--; gs = 'crash'; crashTimer = 70;
       return;
     }
 
-    if (isParked(car)) {
-      gs = 'levelup'; levelupTimer = 90; parkGlow = 0;
+    // tutorial progression
+    if (LEVELS[level].tutorial) {
+      if (tutStep === 0 && player.speed > 0.6) tutStep = 1;
+      else if (tutStep === 1 && Math.abs(player.heading - tutStartAngle) > 0.3) tutStep = 2;
+      else if (tutStep === 2 && player.speed < -0.3) tutStep = 3;
     }
+
+    if (isParked()) { gs = 'levelup'; levelupTimer = 90; }
   }
 
   // ---- DRAW HELPERS ----
@@ -302,92 +455,159 @@
     ctx.fillStyle = '#263238';
     if (horiz) ctx.fillRect(o.x+o.w*0.18, o.y+7, o.w*0.64, o.h-14);
     else       ctx.fillRect(o.x+7, o.y+o.h*0.18, o.w-14, o.h*0.64);
-    ctx.fillStyle = '#455a64';
+    ctx.strokeStyle = '#546e7a'; ctx.lineWidth = 1;
     roundRect(o.x+3, o.y+3, o.w-6, o.h-6, 6); ctx.stroke();
   }
 
-  function drawCar(c, body) {
-    ctx.save();
-    ctx.translate(c.x, c.y);
-    ctx.rotate(c.angle);
-    // shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    roundRect(-CAR_W/2+2, -CAR_L/2+3, CAR_W, CAR_L, 7); ctx.fill();
-    // body
-    ctx.fillStyle = body;
-    roundRect(-CAR_W/2, -CAR_L/2, CAR_W, CAR_L, 7); ctx.fill();
-    // windshield (front = up)
-    ctx.fillStyle = 'rgba(20,30,40,0.85)';
-    roundRect(-CAR_W/2+4, -CAR_L/2+6, CAR_W-8, 11, 3); ctx.fill();
-    // rear window
-    roundRect(-CAR_W/2+4, CAR_L/2-15, CAR_W-8, 9, 3); ctx.fill();
-    // headlights
+  function drawMover(m) {
+    const horiz = m.w > m.h;
+    ctx.fillStyle = '#ef5350';
+    roundRect(m.x+2, m.y+2, m.w-4, m.h-4, 6); ctx.fill();
+    ctx.fillStyle = '#b71c1c';
+    if (horiz) ctx.fillRect(m.x+m.w*0.2, m.y+5, m.w*0.6, m.h-10);
+    else       ctx.fillRect(m.x+5, m.y+m.h*0.2, m.w-10, m.h*0.6);
+    // headlights point in travel direction
     ctx.fillStyle = '#fff8c4';
-    ctx.fillRect(-CAR_W/2+3, -CAR_L/2+1, 5, 3);
-    ctx.fillRect( CAR_W/2-8, -CAR_L/2+1, 5, 3);
+    if (horiz) { const hx = m.dir > 0 ? m.x+m.w-5 : m.x+1; ctx.fillRect(hx, m.y+3, 4, m.h-6); }
+    else       { const hy = m.dir > 0 ? m.y+m.h-5 : m.y+1; ctx.fillRect(m.x+3, hy, m.w-6, 4); }
+  }
+
+  // body of one rectangular unit, already translated+rotated (forward = up)
+  function drawUnitBody(len, wid, color) {
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    roundRect(-wid/2+2, -len/2+3, wid, len, 7); ctx.fill();
+    ctx.fillStyle = color;
+    roundRect(-wid/2, -len/2, wid, len, 7); ctx.fill();
+  }
+
+  function drawCabAt(cx, cy, ang, spec) {
+    const u = spec.units[0];
+    ctx.save();
+    ctx.translate(cx, cy); ctx.rotate(ang);
+    if (spec.key === 'tank') {
+      // treads
+      ctx.fillStyle = '#2e3b2e';
+      ctx.fillRect(-u.wid/2, -u.len/2, 8, u.len);
+      ctx.fillRect( u.wid/2-8, -u.len/2, 8, u.len);
+      ctx.fillStyle = '#1f291f';
+      for (let y = -u.len/2+3; y < u.len/2-3; y += 7) {
+        ctx.fillRect(-u.wid/2, y, 8, 3); ctx.fillRect(u.wid/2-8, y, 8, 3);
+      }
+      // hull
+      ctx.fillStyle = spec.color;
+      roundRect(-u.wid/2+7, -u.len/2+5, u.wid-14, u.len-10, 4); ctx.fill();
+      // turret + barrel
+      ctx.fillStyle = '#388e3c';
+      ctx.beginPath(); ctx.arc(0, 2, 11, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#2e7d32';
+      ctx.fillRect(-3, -u.len/2-4, 6, u.len/2+6);
+    } else if (spec.key === 'tractor') {
+      drawUnitBody(u.len, u.wid, spec.color);
+      // big rear wheels
+      ctx.fillStyle = '#212121';
+      ctx.fillRect(-u.wid/2-3, u.len/2-16, 6, 14);
+      ctx.fillRect( u.wid/2-3, u.len/2-16, 6, 14);
+      // small front wheels
+      ctx.fillRect(-u.wid/2-2, -u.len/2+3, 4, 9);
+      ctx.fillRect( u.wid/2-2, -u.len/2+3, 4, 9);
+      // cabin
+      ctx.fillStyle = 'rgba(20,30,40,0.85)';
+      roundRect(-u.wid/2+5, -2, u.wid-10, 14, 3); ctx.fill();
+      ctx.fillStyle = '#fff8c4';
+      ctx.fillRect(-u.wid/2+3, -u.len/2+1, 5, 3);
+      ctx.fillRect( u.wid/2-8, -u.len/2+1, 5, 3);
+    } else {
+      // car / sport / truck cab
+      drawUnitBody(u.len, u.wid, spec.color);
+      ctx.fillStyle = 'rgba(20,30,40,0.85)';
+      roundRect(-u.wid/2+4, -u.len/2+6, u.wid-8, 11, 3); ctx.fill();
+      if (spec.key !== 'truck') { roundRect(-u.wid/2+4, u.len/2-15, u.wid-8, 9, 3); ctx.fill(); }
+      ctx.fillStyle = '#fff8c4';
+      ctx.fillRect(-u.wid/2+3, -u.len/2+1, 5, 3);
+      ctx.fillRect( u.wid/2-8, -u.len/2+1, 5, 3);
+      if (spec.key === 'truck') {  // hitch nub
+        ctx.fillStyle = '#263238';
+        ctx.fillRect(-3, u.len/2-2, 6, 5);
+      }
+    }
     ctx.restore();
   }
 
-  function drawTarget() {
-    const t = LEVELS[level].target;
+  function drawTrailerAt(cx, cy, ang, t) {
+    ctx.save();
+    ctx.translate(cx, cy); ctx.rotate(ang);
+    drawUnitBody(t.len, t.wid, '#90a4ae');
+    ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1;
+    for (let y = -t.len/2+8; y < t.len/2-6; y += 9) {
+      ctx.beginPath(); ctx.moveTo(-t.wid/2+3, y); ctx.lineTo(t.wid/2-3, y); ctx.stroke();
+    }
+    ctx.fillStyle = '#263238';   // front hitch
+    ctx.fillRect(-3, -t.len/2-3, 6, 5);
+    ctx.restore();
+  }
+
+  function drawVehicle() {
+    // draw trailers first (behind), then a coupling bar, then cab
+    for (let i = player.trailers.length - 1; i >= 0; i--) {
+      const a = player.tnodes[i], b = player.tnodes[i+1];
+      drawTrailerAt((a.x+b.x)/2, (a.y+b.y)/2, vecAngle(a.x-b.x, a.y-b.y), player.trailers[i]);
+    }
+    drawCabAt(player.C.x, player.C.y, player.heading, player.spec);
+  }
+
+  function drawBay() {
+    const t = LEVELS[level].bay;
     const ok = parkGlow > 0;
     const pulse = 0.5 + 0.35 * Math.sin(frame / 12);
     ctx.save();
     ctx.strokeStyle = `rgba(105,240,174,${ok ? 1 : pulse})`;
-    ctx.lineWidth = 3;
-    ctx.setLineDash([10, 7]);
-    ctx.strokeRect(t.x, t.y, t.w, t.h);
-    ctx.setLineDash([]);
-    // big P + orientation chevron
+    ctx.lineWidth = 3; ctx.setLineDash([10, 7]);
+    ctx.strokeRect(t.x, t.y, t.w, t.h); ctx.setLineDash([]);
     const cx = t.x + t.w/2, cy = t.y + t.h/2;
-    ctx.translate(cx, cy);
-    ctx.rotate(t.angle);
+    ctx.translate(cx, cy); ctx.rotate(t.angle);
     ctx.fillStyle = `rgba(105,240,174,${ok ? 1 : 0.55})`;
     ctx.font = 'bold 26px monospace';
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('P', 0, 2);
-    ctx.beginPath();
-    ctx.moveTo(-9, -22); ctx.lineTo(0, -31); ctx.lineTo(9, -22);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(-9, -22); ctx.lineTo(0, -31); ctx.lineTo(9, -22); ctx.stroke();
     ctx.restore();
   }
 
   function drawLot() {
     ctx.fillStyle = '#2b2f36';
     ctx.fillRect(0, 0, W, H);
-    // outer kerb
-    ctx.strokeStyle = '#f4d35e';
-    ctx.lineWidth = 4;
+    ctx.strokeStyle = '#f4d35e'; ctx.lineWidth = 4;
     ctx.strokeRect(M, M, W-2*M, H-2*M);
-    // faint lane hatching
-    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
-    ctx.lineWidth = 2;
-    for (let y = 40; y < H; y += 60) {
-      ctx.beginPath(); ctx.moveTo(20, y); ctx.lineTo(W-20, y); ctx.stroke();
-    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = 2;
+    for (let y = 40; y < H; y += 60) { ctx.beginPath(); ctx.moveTo(20, y); ctx.lineTo(W-20, y); ctx.stroke(); }
   }
 
   // ---- RENDER ----
   function render() {
     drawLot();
+    if (gs === 'title')  { titleScreen(); return; }
+    if (gs === 'select') { selectScreen(); return; }
+    if (gs === 'win')    { winScreen(); return; }
 
-    if (gs === 'start') { screen('start'); return; }
-    if (gs === 'win')   { screen('win');   return; }
-
-    drawTarget();
-    LEVELS[level].obstacles.forEach(drawParkedCar);
-
-    if (gs === 'crash') {
-      drawCar(car, frame % 8 < 4 ? '#ff5252' : '#ffd54f');
+    drawBay();
+    LEVELS[level].obs.forEach(drawParkedCar);
+    movers.forEach(drawMover);
+    if (gs === 'crash' && frame % 8 < 4) {
+      ctx.globalAlpha = 0.5; drawVehicle(); ctx.globalAlpha = 1;
     } else {
-      drawCar(car, '#ffd54f');
+      drawVehicle();
     }
-
     hud();
 
-    if (gs === 'crash') banner('CRUNCH!', '#ff5252', lives > 0 ? 'careful…' : 'out of cars');
+    if (LEVELS[level].tutorial && gs === 'playing') {
+      ctx.textAlign = 'center';
+      ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, H-46, W, 30);
+      ctx.fillStyle = '#69f0ae'; ctx.font = 'bold 12px monospace';
+      ctx.fillText('TUTORIAL ' + (tutStep+1) + '/4 · ' + TUT_TIPS[tutStep], W/2, H-26);
+    }
+    if (gs === 'crash')   banner('CRUNCH!', '#ff5252', lives > 0 ? 'try again…' : 'out of tries');
     if (gs === 'levelup') banner('PARKED!', '#69f0ae',
-      level + 1 < LEVELS.length ? 'next lot →' : 'all done!');
+      level + 1 < LEVELS.length ? 'lot ' + (level+2) + ' →' : 'all done!');
   }
 
   function hud() {
@@ -397,55 +617,101 @@
     ctx.fillText(LEVELS[level].name, W/2, 22);
     ctx.textAlign = 'right'; ctx.fillStyle = '#fff';
     ctx.fillText(time(totalFrames), W-12, 22);
-    // lives as little cars
-    ctx.textAlign = 'left'; ctx.fillStyle = '#ffd54f'; ctx.font = '14px monospace';
+    ctx.textAlign = 'left'; ctx.fillStyle = player.spec.color; ctx.font = '11px monospace';
+    ctx.fillText(player.spec.name, 12, 38);
+    ctx.fillStyle = '#ffd54f'; ctx.font = '14px monospace';
     ctx.fillText('🚗'.repeat(Math.max(0, lives)), 12, H-14);
   }
 
-  function time(f) {
-    const s = f / 60;
-    return s.toFixed(1) + 's';
-  }
+  function time(f) { return (f/60).toFixed(1) + 's'; }
 
   function banner(title, col, sub) {
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    ctx.fillRect(0, H/2-46, W, 92);
+    ctx.fillStyle = 'rgba(0,0,0,0.45)'; ctx.fillRect(0, H/2-46, W, 92);
     ctx.fillStyle = col; ctx.font = 'bold 34px monospace';
     ctx.fillText(title, W/2, H/2-6);
     ctx.fillStyle = '#ddd'; ctx.font = '13px monospace';
     ctx.fillText(sub, W/2, H/2+24);
   }
 
-  function screen(type) {
+  function statBar(label, val, x, y, col) {
+    ctx.textAlign = 'left'; ctx.fillStyle = '#aaa'; ctx.font = '10px monospace';
+    ctx.fillText(label, x, y);
+    ctx.fillStyle = '#222'; ctx.fillRect(x+54, y-8, 90, 8);
+    ctx.fillStyle = col; ctx.fillRect(x+54, y-8, 90*Math.max(0.05, Math.min(1, val)), 8);
+  }
+
+  function titleScreen() {
     ctx.textAlign = 'center';
-    if (type === 'start') {
-      ctx.fillStyle = '#ffd54f'; ctx.font = 'bold 34px monospace';
-      ctx.fillText('VALET', W/2, H/2-120);
-      ctx.fillText('PARKING', W/2, H/2-82);
-      // a little demo car + spot
-      ctx.strokeStyle = '#69f0ae'; ctx.lineWidth = 3; ctx.setLineDash([8,6]);
-      ctx.strokeRect(W/2-36, H/2-46, 72, 60); ctx.setLineDash([]);
-      drawCar({ x: W/2, y: H/2+40, angle: 0 }, '#ffd54f');
-      ctx.fillStyle = '#aaa'; ctx.font = '12px monospace';
-      ctx.fillText('STEER + GAS / REV INTO THE GREEN P', W/2, H/2+86);
-      ctx.fillText('DON\'T HIT THE OTHER CARS OR KERB', W/2, H/2+104);
-      ctx.fillStyle = frame % 60 < 30 ? '#69f0ae' : '#fff'; ctx.font = 'bold 13px monospace';
-      ctx.fillText('GAS / SPACE TO START', W/2, H/2+140);
-      if (bestTime > 0) {
-        ctx.fillStyle = '#777'; ctx.font = '11px monospace';
-        ctx.fillText('BEST: ' + time(bestTime), W/2, H/2+162);
-      }
-    } else {
-      ctx.fillStyle = '#69f0ae'; ctx.font = 'bold 38px monospace';
-      ctx.fillText('ALL PARKED!', W/2, H/2-40);
-      ctx.fillStyle = '#fff'; ctx.font = '16px monospace';
-      ctx.fillText('TIME: ' + time(totalFrames), W/2, H/2+2);
-      ctx.fillStyle = '#f4d35e';
-      ctx.fillText('BEST: ' + time(bestTime), W/2, H/2+28);
-      ctx.fillStyle = frame % 60 < 30 ? '#69f0ae' : '#fff'; ctx.font = 'bold 13px monospace';
-      ctx.fillText('GAS / SPACE TO PLAY AGAIN', W/2, H/2+72);
+    ctx.fillStyle = '#ffd54f'; ctx.font = 'bold 34px monospace';
+    ctx.fillText('VALET', W/2, H/2-130);
+    ctx.fillText('PARKING', W/2, H/2-92);
+    ctx.strokeStyle = '#69f0ae'; ctx.lineWidth = 3; ctx.setLineDash([8,6]);
+    ctx.strokeRect(W/2-30, H/2-48, 60, 64); ctx.setLineDash([]);
+    drawCabAt(W/2, H/2+44, 0, VEHICLES[0]);
+    ctx.fillStyle = '#aaa'; ctx.font = '12px monospace';
+    ctx.fillText('5 VEHICLES · 10 LOTS · MOVING TRAFFIC', W/2, H/2+92);
+    ctx.fillText('PARK IN THE GREEN P WITHOUT A SCRATCH', W/2, H/2+110);
+    ctx.fillStyle = frame % 60 < 30 ? '#69f0ae' : '#fff'; ctx.font = 'bold 13px monospace';
+    ctx.fillText('GAS / SPACE TO START', W/2, H/2+146);
+    if (bestTime > 0) {
+      ctx.fillStyle = '#777'; ctx.font = '11px monospace';
+      ctx.fillText('BEST RUN: ' + time(bestTime), W/2, H/2+168);
     }
+  }
+
+  function selectScreen() {
+    const spec = VEHICLES[selIndex];
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#fff'; ctx.font = 'bold 20px monospace';
+    ctx.fillText('CHOOSE VEHICLE', W/2, 64);
+    ctx.fillStyle = '#888'; ctx.font = '12px monospace';
+    ctx.fillText('◀ ' + (selIndex+1) + ' / ' + VEHICLES.length + ' ▶', W/2, 86);
+
+    ctx.fillStyle = spec.color; ctx.font = 'bold 22px monospace';
+    ctx.fillText(spec.name, W/2, 150);
+
+    // preview (with trailers if any), pointing up
+    const oldC = { ...player.C }, oldH = player.heading, oldNodes = player.tnodes,
+          oldTrailers = player.trailers, oldCab = player.cab, oldSpec = player.spec;
+    buildPlayer(spec);
+    player.C = { x: W/2, y: 250 }; player.heading = 0;
+    const f = { x: 0, y: -1 };
+    let prev = { x: W/2, y: 250 + player.cab.len*0.42 };
+    player.tnodes = [ { ...prev } ];
+    for (const t of player.trailers) { prev = { x: prev.x, y: prev.y + t.len*0.9 }; player.tnodes.push({ ...prev }); }
+    drawVehicle();
+    player.C = oldC; player.heading = oldH; player.tnodes = oldNodes;
+    player.trailers = oldTrailers; player.cab = oldCab; player.spec = oldSpec;
+
+    const bx = W/2 - 72, by = 360;
+    statBar('SPEED', spec.maxFwd/4.5, bx, by,    '#ff5252');
+    statBar('AGILITY', spec.turn/0.09, bx, by+22,'#42a5f5');
+    let totalLen = spec.units.reduce((s,u)=>s+u.len, 0);
+    statBar('LENGTH', totalLen/180,   bx, by+44, '#ffd54f');
+    statBar('TRAILERS', (spec.units.length-1)/2, bx, by+66, '#90a4ae');
+
+    ctx.textAlign = 'center'; ctx.fillStyle = '#aaa'; ctx.font = '11px monospace';
+    const notes = { car:'Balanced & forgiving', sport:'Fast but slippery',
+      tractor:'Slow, turns on a dime', tank:'Rotates in place', truck:'Two trailers — expert' };
+    ctx.fillText(notes[spec.key] || '', W/2, by+96);
+
+    ctx.fillStyle = '#888'; ctx.font = '11px monospace';
+    ctx.fillText('◀ ▶ TO CHANGE', W/2, H-70);
+    ctx.fillStyle = frame % 60 < 30 ? '#69f0ae' : '#fff'; ctx.font = 'bold 13px monospace';
+    ctx.fillText('GAS TO DRIVE', W/2, H-48);
+  }
+
+  function winScreen() {
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#69f0ae'; ctx.font = 'bold 34px monospace';
+    ctx.fillText('ALL 10 PARKED!', W/2, H/2-40);
+    ctx.fillStyle = '#fff'; ctx.font = '16px monospace';
+    ctx.fillText('TIME: ' + time(totalFrames), W/2, H/2+2);
+    ctx.fillStyle = '#f4d35e';
+    ctx.fillText('BEST: ' + time(bestTime), W/2, H/2+28);
+    ctx.fillStyle = frame % 60 < 30 ? '#69f0ae' : '#fff'; ctx.font = 'bold 13px monospace';
+    ctx.fillText('GAS / SPACE FOR TITLE', W/2, H/2+74);
   }
 
   // ---- RESIZE ----
