@@ -184,24 +184,6 @@
         .nameplate a:hover { text-decoration: underline; }
         .game-invaders { color: #3f6f4f; }
         .game-parking  { color: #8a5a1e; }
-
-        /* Donation */
-        .donate-btn {
-            display: inline-block;
-            font-family: 'Special Elite', monospace;
-            font-size: 1rem;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            text-decoration: none;
-            padding: 0.65rem 1.6rem;
-            color: #2a1c0c;
-            border: 2px solid var(--brass-d);
-            border-radius: 6px;
-            background: linear-gradient(#d8b15c, #a87c30);
-            box-shadow: inset 0 1px 0 rgba(255,244,214,0.7), inset 0 -2px 4px rgba(94,63,28,0.4), 0 3px 6px rgba(0,0,0,0.4);
-        }
-        .donate-btn:hover { background: linear-gradient(#e6c074, #b98a3a); }
-        .donate-btn:active { transform: translateY(1px); box-shadow: inset 0 2px 5px rgba(94,63,28,0.6); }
     </style>
 </head>
 <body>
@@ -217,20 +199,6 @@
             <button onclick="greet('/api/hello')">Hello World</button>
             <button onclick="greet('/api/hello/maria'); speakMaria()">Hello Maria</button>
         </div>
-    </div>
-
-    <div class="card">
-        <h2>Help Me Get a 911</h2>
-        <p style="margin:0 0 1rem;color:#5a3d1d;font-family:'IM Fell English SC',serif;font-size:1.2rem;line-height:1.5;">
-            I'm chasing a dream: a <strong>Porsche 911</strong> 🏎️ — and every sponsorship gets me
-            one step closer to the driver's seat.
-        </p>
-        <p style="margin:0 0 1.25rem;color:#5a3d1d;font-family:'IM Fell English SC',serif;font-size:1.1rem;line-height:1.5;">
-            If these little contraptions brought you a smile, please consider chipping in.
-            It would mean the world to me. 🙏
-        </p>
-        <a id="donate-link" href="https://github.com/sponsors/cosmincringasu" target="_blank" rel="noopener"
-           class="donate-btn">⚙ Sponsor on GitHub</a>
     </div>
 
     <div class="card">
