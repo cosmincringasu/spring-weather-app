@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>📈 Stock Advisor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Special+Elite&display=swap" rel="stylesheet">
+  <style>
+    :root { --brass:#b88a3e; --brass-d:#5e3f1c; --ink:#e8dcc0; --green:#4caf6a; --red:#e0533d; --panel:#1d2630; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; padding: 2rem 1rem 3rem; min-height: 100vh;
+      font-family: 'Special Elite', 'Courier New', monospace;
+      color: var(--ink);
+      background: radial-gradient(circle at 50% -10%, rgba(184,138,62,0.15), transparent 55%), linear-gradient(160deg,#10161d,#0a0d12);
+    }
+    .wrap { max-width: 720px; margin: 0 auto; }
+    a.back { color:#9bb0c4; text-decoration:none; font-size:13px; }
+    a.back:hover { color:#fff; }
+    h1 { font-family:'Cinzel Decorative',serif; color:#e7c98b; text-align:center; font-size:1.9rem; margin:.5rem 0 .25rem; }
+    .disclaimer {
+      background: rgba(224,83,61,0.12); border:1px solid var(--red); border-radius:8px;
+      padding:.6rem .9rem; font-size:12px; color:#f0c6bd; margin:1rem 0 1.5rem; line-height:1.5;
+    }
+    .panel { background:var(--panel); border:1px solid var(--brass-d); border-radius:10px; padding:1.2rem 1.3rem; margin-bottom:1.5rem; box-shadow:0 4px 14px rgba(0,0,0,.5); }
+    .panel h2 { font-family:'Cinzel Decorative',serif; color:var(--brass); font-size:1.15rem; margin:0 0 1rem; font-weight:700; }
+    .muted { color:#8da0b0; font-size:12px; }
+    /* picks */
+    .pick { display:flex; align-items:center; gap:.9rem; padding:.7rem .6rem; border-radius:8px; margin-bottom:.6rem; background:rgba(255,255,255,.03); border-left:4px solid var(--brass); }
+    .pick .rank { font-family:'Cinzel Decorative',serif; font-size:1.6rem; width:2rem; text-align:center; }
+    .pick.r1 { border-left-color:#ffd24a; } .pick.r1 .rank { color:#ffd24a; }
+    .pick.r2 { border-left-color:#cfd4dc; } .pick.r2 .rank { color:#cfd4dc; }
+    .pick.r3 { border-left-color:#cd7f4a; } .pick.r3 .rank { color:#cd7f4a; }
+    .pick .tk { font-weight:bold; font-size:1.1rem; }
+    .pick .nm { font-size:12px; color:#9bb0c4; }
+    .pick .why { font-size:11px; color:#8da0b0; }
+    .pick .px { margin-left:auto; text-align:right; }
+    .pick .score { font-size:11px; color:#8da0b0; }
+    /* form */
+    form { display:grid; grid-template-columns: 1.4fr 1fr 1fr auto auto; gap:.5rem; align-items:end; }
+    label { font-size:11px; color:#9bb0c4; display:block; margin-bottom:.2rem; }
+    input { width:100%; padding:.45rem .5rem; background:#0e141b; border:1px solid var(--brass-d); border-radius:5px; color:var(--ink); font-family:inherit; font-size:.95rem; }
+    input:focus { outline:none; border-color:var(--brass); }
+    button { padding:.5rem .8rem; border:1px solid var(--brass-d); border-radius:6px; cursor:pointer; font-family:inherit; font-size:.85rem; text-transform:uppercase; letter-spacing:.5px; color:#10161d; }
+    .buy { background:linear-gradient(#5fcf83,#3a9c5c); } .sell { background:linear-gradient(#e58a7a,#c9543d); }
+    button:active { transform:translateY(1px); }
+    /* table */
+    table { width:100%; border-collapse:collapse; font-size:.9rem; }
+    th, td { text-align:right; padding:.45rem .4rem; border-bottom:1px solid rgba(255,255,255,.08); white-space:nowrap; }
+    th:first-child, td:first-child { text-align:left; }
+    th { color:#9bb0c4; font-size:11px; text-transform:uppercase; }
+    .pos { color:var(--green); } .neg { color:var(--red); }
+    .sig-SELL { color:var(--red); font-weight:bold; } .sig-TRIM { color:#ffd24a; } .sig-HOLD { color:#9bb0c4; } .sig-NA { color:#6b7c8a; }
+    .total-row td { border-top:2px solid var(--brass-d); font-weight:bold; font-size:1rem; }
+    .big-pnl { font-size:1.6rem; font-family:'Cinzel Decorative',serif; }
+    .del { background:none; border:none; color:#6b7c8a; cursor:pointer; font-size:14px; }
+    .del:hover { color:var(--red); }
+    .row-actions { text-align:center; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <a class="back" href="/">← Back</a>
+    <h1>📈 Stock Advisor</h1>
+
+    <div class="disclaimer">
+      ⚠ <strong>Not financial advice.</strong> Picks and sell signals are <em>mechanical</em> momentum/trend
+      rules computed from end-of-day price data (Stooq) — not real-time news analysis. Prices are delayed.
+      Past performance does not predict future results. Do your own research; you alone are responsible for your trades.
+    </div>
+
+    <div class="panel">
+      <h2>Top 3 Picks <span class="muted" id="picks-note"></span></h2>
+      <div id="picks">Loading market data…</div>
+    </div>
+
+    <div class="panel">
+      <h2>Record a Trade</h2>
+      <form id="trade-form">
+        <div><label>Ticker</label><input id="t-ticker" placeholder="AAPL" required></div>
+        <div><label>Quantity</label><input id="t-qty" type="number" step="any" min="0" placeholder="10" required></div>
+        <div><label>Price ($)</label><input id="t-price" type="number" step="any" min="0" placeholder="195.50" required></div>
+        <button type="button" class="buy"  onclick="submitTrade('buy')">Buy</button>
+        <button type="button" class="sell" onclick="submitTrade('sell')">Sell</button>
+      </form>
+      <p class="muted" id="trade-msg" style="margin:.6rem 0 0"></p>
+    </div>
+
+    <div class="panel">
+      <h2>My Portfolio <span class="muted" id="pf-note"></span></h2>
+      <div id="portfolio">Loading…</div>
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const money = v => (v == null ? '—' : (v < 0 ? '-$' : '$') + Math.abs(v).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2}));
+    const pct = v => (v == null ? '—' : (v>=0?'+':'') + v.toFixed(2) + '%');
+    const cls = v => v == null ? '' : (v >= 0 ? 'pos' : 'neg');
+
+    function loadPicks() {
+      fetch('/api/stocks/suggestions').then(r=>r.json()).then(list=>{
+        if (!list.length) { $('picks').innerHTML = '<span class="muted">Market data unavailable right now. Try again shortly.</span>'; return; }
+        $('picks').innerHTML = list.map(s => `
+          <div class="pick r${s.rank}">
+            <div class="rank">${s.rank}</div>
+            <div>
+              <div class="tk">${s.ticker} <span class="nm">${s.name}</span></div>
+              <div class="why">${s.rationale}</div>
+            </div>
+            <div class="px">
+              <div>$${s.price.toFixed(2)}</div>
+              <div class="score">momentum ${s.score.toFixed(1)}</div>
+            </div>
+          </div>`).join('');
+        $('picks-note').textContent = '· ranked best → worst by momentum';
+      }).catch(()=> $('picks').innerHTML = '<span class="muted">Could not load suggestions.</span>');
+    }
+
+    function renderPortfolio(pf) {
+      $('pf-note').textContent = pf.asOf ? `· as of ${pf.asOf} · ${pf.dataSource}` : '';
+      if (!pf.positions.length) { $('portfolio').innerHTML = '<span class="muted">No holdings yet. Record a buy above.</span>'; return; }
+      const rows = pf.positions.map(p => `
+        <tr>
+          <td>${p.ticker}</td>
+          <td>${p.quantity}</td>
+          <td>${money(p.avgPrice)}</td>
+          <td>${money(p.price)}</td>
+          <td>${money(p.value)}</td>
+          <td class="${cls(p.pnl)}">${money(p.pnl)}</td>
+          <td class="${cls(p.pnlPct)}">${pct(p.pnlPct)}</td>
+          <td class="sig-${(p.signal||'NA').replace('/','')}" title="${p.signalReason}">${p.signal}</td>
+          <td class="row-actions"><button class="del" title="Remove" onclick="removeHolding('${p.ticker}')">✕</button></td>
+        </tr>`).join('');
+      const totalCls = cls(pf.totalPnl);
+      $('portfolio').innerHTML = `
+        <table>
+          <thead><tr>
+            <th>Ticker</th><th>Qty</th><th>Avg cost</th><th>Price</th><th>Value</th><th>PnL</th><th>%</th><th>Signal</th><th></th>
+          </tr></thead>
+          <tbody>
+            ${rows}
+            <tr class="total-row">
+              <td>TOTAL</td><td></td><td></td><td></td>
+              <td>${money(pf.totalValue)}</td>
+              <td class="${totalCls}">${money(pf.totalPnl)}</td>
+              <td class="${totalCls}">${pct(pf.totalPnlPct)}</td>
+              <td></td><td></td>
+            </tr>
+          </tbody>
+        </table>
+        <div style="text-align:center;margin-top:1rem">
+          <div class="muted">Total unrealized PnL</div>
+          <div class="big-pnl ${totalCls}">${money(pf.totalPnl)} <span style="font-size:1rem">(${pct(pf.totalPnlPct)})</span></div>
+          ${pf.priced ? '' : '<div class="muted" style="margin-top:.4rem">Some prices unavailable — totals shown when all holdings are priced.</div>'}
+        </div>`;
+    }
+
+    function loadPortfolio() {
+      fetch('/api/stocks/portfolio').then(r=>r.json()).then(renderPortfolio)
+        .catch(()=> $('portfolio').innerHTML = '<span class="muted">Could not load portfolio.</span>');
+    }
+
+    function submitTrade(action) {
+      const ticker = $('t-ticker').value.trim().toUpperCase();
+      const quantity = parseFloat($('t-qty').value);
+      const price = parseFloat($('t-price').value);
+      if (!ticker || !(quantity > 0) || !(price >= 0)) { $('trade-msg').textContent = 'Enter a ticker, quantity and price.'; return; }
+      $('trade-msg').textContent = 'Saving…';
+      fetch('/api/stocks/trade', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ ticker, quantity, price, action })
+      }).then(r=>r.json()).then(pf => {
+        $('trade-msg').textContent = `${action === 'sell' ? 'Sold' : 'Bought'} ${quantity} ${ticker} @ $${price}`;
+        $('t-qty').value = ''; $('t-price').value = '';
+        renderPortfolio(pf);
+      }).catch(()=> $('trade-msg').textContent = 'Failed to save trade.');
+    }
+
+    function removeHolding(ticker) {
+      fetch('/api/stocks/holding/' + encodeURIComponent(ticker), { method:'DELETE' })
+        .then(r=>r.json()).then(renderPortfolio).catch(()=>{});
+    }
+
+    loadPicks();
+    loadPortfolio();
+  </script>
+</body>
+</html>
